@@ -32,6 +32,8 @@ def test_command_line_quotes_task_and_attachments():
     )
     assert "-m vultr/glm-5.3" in cmd and "--auto" in cmd and "--format json" in cmd
     assert "'/workspace/design/login error.png'" in cmd
+    # Regression (Vultr run 2026-11-08): -f is a list, so the task must come before it.
+    assert cmd.index("Fix it") < cmd.index("-f ")
     assert f"> {OUTPUT}" in cmd
 
 

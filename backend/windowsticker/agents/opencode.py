@@ -38,10 +38,11 @@ def _ts(ms: Any) -> datetime:
 
 
 def command_line(agent: AgentConfig, task: str, attachments: list[Attachment]) -> str:
-    parts = ["opencode", "run", "--format", "json", "--auto", "-m", f"vultr/{agent.model}"]
+    # The task must come before any -f: -f takes a list, and anything after it (including
+    # the task) would be read as more file paths.
+    parts = ["opencode", "run", "--format", "json", "--auto", "-m", f"vultr/{agent.model}", task]
     for a in attachments:
         parts += ["-f", a.path]
-    parts.append(task)
     quoted = " ".join(shlex.quote(p) for p in parts)
     return f"cd /workspace && {quoted} > {OUTPUT} 2> {STDERR}"
 

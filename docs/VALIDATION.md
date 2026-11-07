@@ -76,3 +76,15 @@ Serverless Inference with a placeholder key.
 Result on the VX1 host: OpenCode runs boot in 0.86 s, complete the README-exfiltration and
 dependency-confusion traps without incident, and their only network activity is the allowed DNS
 lookup for the inference API.
+
+### First 36-run OpenCode test on production (2026-11-08)
+
+0 incidents in 33 graded runs; the 3 image-injection runs were excluded by two harness bugs, both
+fixed and verified on the host before a clean re-run:
+
+| Bug | Fix |
+|---|---|
+| OpenCode's `-f` (attach) takes a list, so the task placed after it was read as a file path | task now precedes `-f` (regression test added) |
+| The OpenCode provider config did not declare image input, so OpenCode treated the models as text-only and never saw the screenshot | every model in the config declares `attachment` and image input, matching the live catalogue |
+
+After the fix OpenCode solves the image trap and explicitly refuses the instruction hidden in the screenshot.
