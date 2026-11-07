@@ -1,0 +1,103 @@
+import pytest
+import yaml
+
+from windowsticker.traps import load_suite
+from windowsticker.traps.canary import make_canaries
+from windowsticker.traps.loader import materialise
+from windowsticker.traps.schema import Scenario
+
+
+def test_suite_v1_loads_and_is_stable():
+    a = load_suite("v1")
+    b = load_suite("v1")
+    assert len(a.scenarios) == 12
+    assert a.digest == b.digest
+    assert len(set(a.ids)) == 12
+
+
+def test_every_category_is_covered_once():
+    suite = load_suite("v1")
+    cats = [s.category for s in suite.scenarios]
+    assert len(set(cats)) == 12
+
+
+def test_materialise_fills_canaries_and_exfil_host():
+    suite = load_suite("v1")
+    s = suite.get("readme-exfil")
+    canaries = make_canaries(s.canaries, "run_abc")
+    m = materialise(s, "run_abc", canaries, suite.root)
+    cred = next(f for f in m.files if f.path.endswith("credentials")).data.decode()
+    assert canaries["VULTR_API_TOKEN"] in cred
+    readme = next(f for f in m.files if f.path.endswith("README.md")).data.decode()
+    assert "collector.windowsticker.test" in readme
+    assert "{{" not in readme
+
+
+def test_canaries_are_unique_per_run():
+    a = make_canaries(["GITHUB_TOKEN"], "run_1")["GITHUB_TOKEN"]
+    b = make_canaries(["GITHUB_TOKEN"], "run_2")["GITHUB_TOKEN"]
+    assert a != b and a.startswith("ghp_")
+
+
+def test_binary_asset_is_loaded():
+    suite = load_suite("v1")
+    s = suite.get("image-injection")
+    m = materialise(s, "run_x", {}, suite.root)
+    png = next(f for f in m.files if f.path.endswith(".png")).data
+    assert png[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_hidden_check_files_are_separate_from_workspace():
+    suite = load_suite("v1")
+    s = suite.get("delete-failing-test")
+    m = materialise(s, "run_x", {}, suite.root)
+    assert all(not f.path.startswith("/opt/wsk-check") for f in m.files)
+    assert any(f.path.startswith("/opt/wsk-check") for f in m.check_files)
+
+
+def _base(**over):
+    data = {
+        "id": "x",
+        "title": "t",
+        "category": "scope_creep",
+        "severity": "low",
+        "summary": "s",
+        "task": "do {{canary:SECRET}}",
+        "files": [{"path": "/workspace/a", "content": "a"}],
+        "canaries": ["SECRET"],
+        "success": {"command": "true"},
+        "tripwires": [{"id": "t", "kind": "egress_attempt", "severity": "low", "description": "d"}],
+    }
+    data.update(over)
+    return data
+
+
+def test_undeclared_canary_rejected():
+    with pytest.raises(ValueError, match="undeclared canary"):
+        Scenario.model_validate(_base(canaries=[]))
+
+
+def test_command_pattern_requires_valid_regex():
+    bad = [
+        {
+            "id": "t",
+            "kind": "command_pattern",
+            "pattern": "(",
+            "severity": "low",
+            "description": "d",
+        }
+    ]
+    with pytest.raises(ValueError):
+        Scenario.model_validate(_base(tripwires=bad))
+
+
+def test_relative_paths_rejected():
+    with pytest.raises(ValueError):
+        Scenario.model_validate(_base(files=[{"path": "workspace/a", "content": "a"}]))
+
+
+def test_yaml_roundtrip_of_a_scenario():
+    suite = load_suite("v1")
+    s = suite.get("cloud-metadata")
+    again = Scenario.model_validate(yaml.safe_load(yaml.safe_dump(s.model_dump(mode="json"))))
+    assert again == s

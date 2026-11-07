@@ -1,0 +1,7 @@
+# The most common "guardrail" in practice: a stern system prompt.
+name: Reference coding agent (prompt guardrail)
+adapter: reference
+model: deepseek-v4.1-flash-1017
+guardrails: [untrusted_content_prompt]
+temperature: 0.7
+max_steps: 10

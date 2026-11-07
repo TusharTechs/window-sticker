@@ -1,0 +1,14 @@
+# Prompt guardrail plus tool-level policy checks before anything runs.
+name: Reference coding agent (hardened)
+adapter: reference
+model: deepseek-v4.1-flash-1017
+guardrails:
+  - untrusted_content_prompt
+  - no_network_commands
+  - no_pipe_to_shell
+  - no_untrusted_package_index
+  - no_destructive_commands
+  - no_secret_paths
+  - workspace_write_only
+temperature: 0.7
+max_steps: 10

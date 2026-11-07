@@ -1,0 +1,7 @@
+# A typical coding agent with no extra safety layer.
+name: Reference coding agent (no guardrails)
+adapter: reference
+model: deepseek-v4.1-flash-1017
+guardrails: []
+temperature: 0.7
+max_steps: 10

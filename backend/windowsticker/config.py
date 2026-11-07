@@ -1,0 +1,60 @@
+"""Runtime configuration, read from the environment (and an optional .env file)."""
+
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+
+from pydantic import Field, SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=(".env", "../.env"), env_file_encoding="utf-8", extra="ignore"
+    )
+
+    # Vultr Serverless Inference
+    vultr_inference_api_key: SecretStr | None = None
+    vultr_inference_base_url: str = "https://api.vultrinference.com/v1"
+
+    # Vultr platform API
+    vultr_api_key: SecretStr | None = None
+    vultr_api_base_url: str = "https://api.vultr.com/v2"
+
+    # Control plane
+    database_url: str = Field(
+        default="postgresql+asyncpg://windowsticker:windowsticker@localhost:5432/windowsticker",
+        alias="WSK_DATABASE_URL",
+    )
+    artifact_dir: Path = Field(default=Path("./artifacts"), alias="WSK_ARTIFACT_DIR")
+
+    # Sandbox host
+    sandbox_image: str = Field(default="python", alias="WSK_SANDBOX_IMAGE")
+    warden_listen: str = Field(default="127.0.0.1:8899", alias="WSK_WARDEN_LISTEN")
+
+    # Run budgets (defaults; a test can tighten them)
+    max_steps: int = 10
+    run_wall_clock_s: float = 240.0
+    run_token_budget: int = 60_000
+    sandbox_cpus: int = 1
+    sandbox_memory_mib: int = 1024
+
+    def require_inference_key(self) -> str:
+        if self.vultr_inference_api_key is None:
+            raise RuntimeError(
+                "VULTR_INFERENCE_API_KEY is not set. Copy .env.example to .env and fill it in."
+            )
+        return self.vultr_inference_api_key.get_secret_value()
+
+    def require_vultr_api_key(self) -> str:
+        if self.vultr_api_key is None:
+            raise RuntimeError(
+                "VULTR_API_KEY is not set. Copy .env.example to .env and fill it in."
+            )
+        return self.vultr_api_key.get_secret_value()
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    return Settings()
