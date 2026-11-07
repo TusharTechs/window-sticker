@@ -1,0 +1,116 @@
+"""Worker: runs on a sandbox host, takes queued tests and executes them.
+
+Add a second VX1 host running this worker and throughput doubles: tests are claimed
+with ``SELECT … FOR UPDATE SKIP LOCKED`` so workers never collide.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import contextlib
+import logging
+import socket
+from typing import Any
+
+from windowsticker.agents.config import AgentConfig
+from windowsticker.config import Settings
+from windowsticker.db.session import Database
+from windowsticker.inference.client import InferenceClient
+from windowsticker.runner.run import RunRecord
+from windowsticker.runner.test import CrashTest, run_crash_test
+from windowsticker.sandbox.base import SandboxDriver
+from windowsticker.service import finish_test, refresh_sticker, save_run
+from windowsticker.traps.loader import load_suite
+from windowsticker.warden.proxy import EgressWarden
+
+log = logging.getLogger("windowsticker.worker")
+
+# Events that are worth storing for the live grid; per-token noise is not.
+STORED_EVENTS = {
+    "test.started",
+    "test.finished",
+    "sandbox.creating",
+    "sandbox.ready",
+    "sandbox.destroyed",
+    "agent.step",
+    "guardrail.refused",
+    "tripwire",
+    "run.verdict",
+    "run.error",
+    "agent.error",
+}
+
+
+class Worker:
+    def __init__(
+        self,
+        db: Database,
+        settings: Settings,
+        driver: SandboxDriver,
+        client: InferenceClient,
+        warden: EgressWarden,
+        name: str | None = None,
+    ) -> None:
+        self.db = db
+        self.settings = settings
+        self.driver = driver
+        self.client = client
+        self.warden = warden
+        self.name = name or socket.gethostname()
+        self._stop = asyncio.Event()
+
+    def stop(self) -> None:
+        self._stop.set()
+
+    async def run_forever(self, poll_s: float = 2.0) -> None:
+        log.info("worker %s ready", self.name)
+        while not self._stop.is_set():
+            if not await self.run_once():
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(self._stop.wait(), timeout=poll_s)
+
+    async def run_once(self) -> bool:
+        test = await self.db.claim_test(self.name)
+        if test is None:
+            return False
+        log.info("claimed %s (%d runs)", test.id, test.runs_requested)
+        suite = load_suite(test.suite)
+
+        async def events(kind: str, payload: dict[str, Any]) -> None:
+            if kind in STORED_EVENTS:
+                run_id = payload.get("run_id")
+                await self.db.add_event(
+                    test.id, kind, payload, run_id=str(run_id) if run_id else None
+                )
+
+        async def on_record(rec: RunRecord) -> None:
+            await save_run(self.db, test.id, rec)
+            await refresh_sticker(self.db, test.id, suite)
+
+        crash = CrashTest(
+            agent=AgentConfig.model_validate(test.agent),
+            suite=suite,
+            runs=test.runs_requested,
+            scenarios=list(test.scenarios) or None,
+            sandbox_concurrency=test.concurrency,
+            image=self.settings.sandbox_image,
+            cpus=self.settings.sandbox_cpus,
+            memory_mib=self.settings.sandbox_memory_mib,
+            test_id=test.id,
+        )
+        try:
+            await run_crash_test(
+                crash,
+                driver=self.driver,
+                client=self.client,
+                warden=self.warden,
+                events=events,
+                on_record=on_record,
+            )
+        except Exception as exc:
+            log.exception("test %s failed", test.id)
+            await finish_test(self.db, test.id, error=f"{type(exc).__name__}: {exc}")
+            return True
+        await finish_test(self.db, test.id)
+        await self.db.add_event(test.id, "test.sticker", {})
+        return True

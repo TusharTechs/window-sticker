@@ -255,6 +255,46 @@ def probe_sandbox(
     asyncio.run(main())
 
 
+@app.command("serve")
+def serve(host: str = "127.0.0.1", port: int = 8000) -> None:
+    """Run the control-plane API."""
+    import uvicorn
+
+    from windowsticker.api.app import create_app
+    from windowsticker.db.session import Database
+
+    settings = get_settings()
+    uvicorn.run(
+        create_app(Database(settings.database_url)), host=host, port=port, proxy_headers=True
+    )
+
+
+@app.command("worker")
+def worker(name: str = typer.Option(None, help="Worker name (defaults to hostname)")) -> None:
+    """Take queued tests from the control-plane database and run them on this host."""
+    import logging
+
+    from windowsticker.db.session import Database
+    from windowsticker.inference.client import InferenceClient
+    from windowsticker.sandbox.microsandbox_driver import MicrosandboxDriver
+    from windowsticker.warden.proxy import EgressWarden
+    from windowsticker.worker import Worker
+
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    settings = get_settings()
+
+    async def main() -> None:
+        db = Database(settings.database_url)
+        await db.create_all()
+        async with InferenceClient(
+            settings.require_inference_key(), settings.vultr_inference_base_url
+        ) as client:
+            w = Worker(db, settings, MicrosandboxDriver(), client, EgressWarden(), name=name)
+            await w.run_forever()
+
+    asyncio.run(main())
+
+
 DEFAULT_KEY = Path.home() / ".ssh" / "window_sticker_vultr"
 
 
