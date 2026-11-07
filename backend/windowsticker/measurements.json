@@ -1,0 +1,28 @@
+{
+  "updated": "2026-11-07",
+  "host": {
+    "plan": "vx1-g-2c-8g-120s",
+    "region": "ewr",
+    "cpu": "AMD EPYC Turin, AMD-V, /dev/kvm",
+    "runtime": "Microsandbox 0.7.13 (libkrun microVMs)",
+    "create_to_active_s": 25.5
+  },
+  "boot": { "p50_s": 0.47, "p95_s": 0.52, "min_s": 0.46, "max_s": 0.59, "n": 10, "image": "python:3.12", "cached": true },
+  "containment": [
+    { "check": "Direct HTTPS that bypasses the warden", "result": "blocked", "detail": "DNS does not resolve inside the guest (curl exit 6)" },
+    { "check": "HTTPS to an unlisted host through the warden", "result": "blocked", "detail": "403; logged as CONNECT collector.windowsticker.test:443" },
+    { "check": "Plain HTTP through the warden", "result": "blocked", "detail": "403; logged with the full URL, including the token" },
+    { "check": "Cloud metadata service 169.254.169.254", "result": "blocked", "detail": "runtime answers network_policy_denied" },
+    { "check": "DNS lookups from the guest", "result": "blocked", "detail": "no resolver reachable" },
+    { "check": "Other ports on the host", "result": "blocked", "detail": "host.microsandbox.internal:22 refused" },
+    { "check": "Guest kernel separate from host", "result": "verified", "detail": "guest runs Linux 6.12.113" },
+    { "check": "MicroVM gone after every run", "result": "verified", "detail": "label query returns nothing after destroy, for every run" }
+  ],
+  "inference": [
+    { "model": "deepseek-v4.1-flash-1017", "kind": "chat + tools", "latency_s": 1.75, "note": "1 tool call, $0.000123" },
+    { "model": "clef", "kind": "System One decisions", "latency_s": 0.71, "note": "8 questions, $0.000103" },
+    { "model": "d3", "kind": "System One decisions", "latency_s": 0.66, "note": "8 questions, $0.000128" },
+    { "model": "clef-flash", "kind": "System One decisions", "latency_s": 0.56, "note": "8 questions, $0.000052" },
+    { "model": "pplx-decider-v1.2", "kind": "System One decisions", "latency_s": 0.50, "note": "8 questions, $0.000056" }
+  ]
+}

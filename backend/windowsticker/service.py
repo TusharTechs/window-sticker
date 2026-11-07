@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
 import secrets
+from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import func, select
@@ -188,6 +191,76 @@ async def finish_test(db: Database, test_id: str, error: str | None = None) -> N
         t.finished_at = utcnow()
         await s.commit()
     await refresh_sticker(db, test_id)
+
+
+async def import_artifacts(db: Database, path: Path, label: str = "") -> str:
+    """Load a CLI test (runs.jsonl + sticker.json + agent.json) into the database.
+
+    The runs are real; this only moves them from files into the control plane. The
+    test keeps its original id, timestamps and agent fingerprint.
+    """
+    sticker = json.loads((path / "sticker.json").read_text())
+    agent_file = path / "agent.json"
+    if agent_file.exists():
+        agent = AgentConfig.model_validate_json(agent_file.read_text())
+    else:
+        a = sticker["agent"]
+        agent = AgentConfig(name=a["name"], model=a["model"], guardrails=a["guardrails"])
+    lines = [json.loads(x) for x in (path / "runs.jsonl").read_text().splitlines() if x.strip()]
+    tested_at = datetime.fromisoformat(sticker["tested_at"])
+    suite_ids = load_suite(sticker["suite"]["name"]).ids
+    used = sorted({r["scenario_id"] for r in lines})
+    focused = used if set(used) != set(suite_ids) else []
+    test = TestRow(
+        id=sticker["test_id"],
+        status="finished",
+        agent=agent.model_dump(),
+        agent_name=agent.name,
+        agent_fingerprint=sticker["agent"]["fingerprint"],
+        model=agent.model,
+        suite=sticker["suite"]["name"],
+        suite_digest=sticker["suite"]["digest"],
+        runs_requested=len(lines),
+        scenarios=focused,
+        concurrency=0,
+        label=label,
+        precomputed=False,
+        worker=lines[0]["host_id"] if lines else None,
+        created_at=tested_at,
+        started_at=tested_at,
+        finished_at=tested_at,
+    )
+    async with db.session() as s:
+        if await s.get(TestRow, test.id) is not None:
+            raise ValueError(f"test {test.id} already exists")
+        s.add(test)
+        for r in lines:
+            v = r["verdict"]
+            serious = bool(v["incident"]) and v.get("incident_severity") in ("critical", "high")
+            s.add(
+                RunRow(
+                    id=r["run_id"],
+                    test_id=test.id,
+                    scenario_id=r["scenario_id"],
+                    host_id=r["host_id"],
+                    sandbox_name=r["sandbox_name"],
+                    incident=v["incident"],
+                    serious=serious,
+                    task_success=v["task_success"],
+                    needs_label=v.get("needs_human_label", False),
+                    failure_mode=v.get("primary_failure_mode", "none"),
+                    cost_usd=r["cost_usd"],
+                    boot_s=r["timings"]["boot_s"],
+                    total_s=r["timings"]["total_s"],
+                    teardown_verified=r["teardown_verified"],
+                    graded=bool(r["evidence"]["steps"]),
+                    record=r,
+                    created_at=tested_at,
+                )
+            )
+        await s.commit()
+    await refresh_sticker(db, test.id)
+    return test.id
 
 
 async def run_counts(db: Database, test_id: str) -> dict[str, int]:

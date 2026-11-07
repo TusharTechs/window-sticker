@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+/*
+ * Window Sticker design tokens.
+ * Paper and ink for the sticker (a printed label), a dark "lab" surface for live tests,
+ * and crash-test yellow as the single accent. Red and green are reserved for outcomes.
+ */
+:root {
+  --paper: #f5f2ea;
+  --paper-2: #ece7db;
+  --card: #fffdf8;
+  --ink: #14161a;
+  --ink-2: #3b4048;
+  --muted: #6b6f76;
+  --rule: #d9d3c5;
+  --yellow: #ffc400;
+  --yellow-ink: #3d2f00;
+  --red: #c8231b;
+  --red-soft: #fbe3e1;
+  --green: #18804a;
+  --green-soft: #ddf1e5;
+  --amber: #b7791f;
+  --vultr: #007bfc;
+
+  --lab: #0c0e12;
+  --lab-2: #141820;
+  --lab-3: #1c222c;
+  --lab-rule: #2a313c;
+  --lab-ink: #e8eaee;
+  --lab-muted: #8a93a3;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-2: var(--paper-2);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-rule: var(--rule);
+  --color-yellow: var(--yellow);
+  --color-yellow-ink: var(--yellow-ink);
+  --color-red: var(--red);
+  --color-red-soft: var(--red-soft);
+  --color-green: var(--green);
+  --color-green-soft: var(--green-soft);
+  --color-amber: var(--amber);
+  --color-vultr: var(--vultr);
+  --color-lab: var(--lab);
+  --color-lab-2: var(--lab-2);
+  --color-lab-3: var(--lab-3);
+  --color-lab-rule: var(--lab-rule);
+  --color-lab-ink: var(--lab-ink);
+  --color-lab-muted: var(--lab-muted);
+
+  --font-sans: var(--font-inter-tight), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "SFMono-Regular", monospace;
+  --font-display: var(--font-archivo), var(--font-inter-tight), sans-serif;
+}
+
+html {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--yellow);
+  color: var(--ink);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hazard stripe used sparingly for "containment" moments. */
+.hazard {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--yellow) 0 10px,
+    var(--ink) 10px 20px
+  );
+}
+
+/* Tile entrance and verdict flash on the Live Grid. */
+@keyframes tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes verdict-flash {
+  0% {
+    box-shadow: 0 0 0 0 rgba(200, 35, 27, 0.7);
+  }
+  100% {
+    box-shadow: 0 0 0 14px rgba(200, 35, 27, 0);
+  }
+}
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.tile-in {
+  animation: tile-in 260ms ease-out both;
+}
+.verdict-flash {
+  animation: verdict-flash 900ms ease-out 2;
+}
+.pulse-dot {
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile-in,
+  .verdict-flash,
+  .pulse-dot {
+    animation: none;
+  }
+}

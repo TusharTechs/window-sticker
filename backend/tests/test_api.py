@@ -90,8 +90,8 @@ async def test_full_control_plane_flow(db):
         after = http.get(f"/api/tests/{test_id}/sticker.json").json()
         assert after["serious_per_1000"]["point"] == pytest.approx(2000 / 3)
 
-        board = http.get("/api/leaderboard").json()
-        assert [b["id"] for b in board] == [test_id]
+        # A focused (single-trap) test is for A/B comparisons, not the leaderboard.
+        assert http.get("/api/leaderboard").json() == []
 
 
 def test_validation_errors(db):

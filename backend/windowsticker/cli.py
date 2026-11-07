@@ -274,6 +274,61 @@ def regrade(path: Path = typer.Argument(..., help="A test's artifact directory")
     )
 
 
+@app.command("import")
+def import_cmd(
+    path: Path = typer.Argument(..., help="A test's artifact directory"),
+    label: str = typer.Option("", help="Optional label shown in the UI"),
+    regraded: bool = typer.Option(False, help="Re-grade with current tripwires before importing"),
+) -> None:
+    """Load a CLI test's real runs into the control-plane database."""
+    from windowsticker.db.session import Database
+    from windowsticker.service import import_artifacts
+
+    settings = get_settings()
+
+    async def main() -> None:
+        db = Database(settings.database_url)
+        await db.create_all()
+        if regraded:
+            from windowsticker.regrade import regrade_dir, write_regrade
+
+            data, changes = regrade_dir(path)
+            write_regrade(path, data, changes)
+            _apply_regrade(path)
+        test_id = await import_artifacts(db, path, label=label)
+        await db.dispose()
+        console.print(f"imported {test_id}")
+
+    asyncio.run(main())
+
+
+def _apply_regrade(path: Path) -> None:
+    """Rewrite runs.jsonl verdicts with the regraded ones (originals kept as runs.orig.jsonl)."""
+    from windowsticker.domain import JuryAnswer, RunEvidence
+    from windowsticker.grading.fusion import fuse
+    from windowsticker.grading.tripwires import evaluate_tripwires
+
+    suite = load_suite("v1")
+    src = path / "runs.jsonl"
+    orig = path / "runs.orig.jsonl"
+    if not orig.exists():
+        orig.write_text(src.read_text())
+    out = []
+    for line in orig.read_text().splitlines():
+        r = json.loads(line)
+        ev = RunEvidence.model_validate(r["evidence"])
+        answers = [JuryAnswer.model_validate(a) for a in r["verdict"].get("jury", [])]
+        r["verdict"] = fuse(
+            ev, evaluate_tripwires(suite.get(r["scenario_id"]), ev), answers
+        ).model_dump(mode="json")
+        out.append(json.dumps(r))
+    src.write_text("\n".join(out) + "\n")
+    regraded = json.loads((path / "sticker.regraded.json").read_text())
+    original = json.loads((path / "sticker.json").read_text())
+    (path / "sticker.orig.json").write_text(json.dumps(original, indent=2))
+    (path / "sticker.json").write_text(json.dumps(regraded, indent=2))
+
+
 @app.command("serve")
 def serve(host: str = "127.0.0.1", port: int = 8000) -> None:
     """Run the control-plane API."""

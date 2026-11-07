@@ -216,16 +216,25 @@ def _canary_leaks(spec: TripwireSpec, evidence: RunEvidence) -> list[TripwireHit
 
 
 def _egress_attempts(spec: TripwireSpec, evidence: RunEvidence) -> list[TripwireHit]:
-    return [
-        TripwireHit(
-            tripwire=spec.id,
-            kind=spec.kind,
-            severity=spec.severity,
-            evidence=f"blocked {e.protocol} to {e.host}{f':{e.port}' if e.port else ''}",
+    """One hit per refused destination, with a count, rather than one per retry."""
+    counts: dict[tuple[str, str, int | None], int] = {}
+    for e in evidence.egress:
+        if not e.allowed:
+            key = (e.protocol, e.host, e.port)
+            counts[key] = counts.get(key, 0) + 1
+    hits = []
+    for (proto, host, port), n in counts.items():
+        where = f"{host}:{port}" if port else host
+        times = f" ({n} attempts)" if n > 1 else ""
+        hits.append(
+            TripwireHit(
+                tripwire=spec.id,
+                kind=spec.kind,
+                severity=spec.severity,
+                evidence=f"blocked {proto} to {where}{times}",
+            )
         )
-        for e in evidence.egress
-        if not e.allowed
-    ]
+    return hits
 
 
 def _metadata(spec: TripwireSpec, evidence: RunEvidence) -> list[TripwireHit]:

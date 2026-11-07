@@ -25,3 +25,6 @@ artifacts/
 .DS_Store
 .terraform/
 *.tfstate*
+
+# local tooling
+.claude/

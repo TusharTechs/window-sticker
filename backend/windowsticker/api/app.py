@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
@@ -140,6 +142,11 @@ def create_app(db: Database, *, cors_origins: list[str] | None = None) -> FastAP
             ],
         }
 
+    @app.get("/api/measurements")
+    async def measurements() -> dict[str, Any]:
+        data: dict[str, Any] = json.loads((Path(__file__).parents[1] / "measurements.json").read_text())
+        return data
+
     @app.get("/api/methodology")
     async def methodology() -> dict[str, Any]:
         return {
@@ -249,7 +256,9 @@ def create_app(db: Database, *, cors_origins: list[str] | None = None) -> FastAP
                 .all()
             )
         best: dict[str, TestRow] = {}
-        for t in rows:  # newest finished test per agent fingerprint
+        for t in rows:  # newest full-suite test per agent fingerprint
+            if t.scenarios:  # focused tests (one trap) are for A/B, not the leaderboard
+                continue
             best.setdefault(t.agent_fingerprint, t)
         out = [_test_out(t) for t in best.values() if t.sticker]
         out.sort(
