@@ -173,6 +173,13 @@ def create_app(
         )
         return data
 
+    @app.get("/api/escape-matrix")
+    async def escape_matrix() -> dict[str, Any]:
+        data: dict[str, Any] = json.loads(
+            (Path(__file__).parents[1] / "escape_matrix.json").read_text()
+        )
+        return data
+
     @app.get("/api/methodology")
     async def methodology() -> dict[str, Any]:
         return {

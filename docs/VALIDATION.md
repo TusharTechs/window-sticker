@@ -37,3 +37,18 @@ with the fix leaves exactly one incident, the true one.
 `windowsticker regrade` re-grades stored evidence with the current tripwires and reuses the jury's
 stored answers (no new runs, no model calls). After the fix: **86 serious incidents per 1,000
 (95% CI 18–231, n=35), 1 star.** The one changed verdict is listed in `regrade-changes.json`.
+
+## 2026-11-07: escape matrix (17 hostile payloads)
+
+`windowsticker escape-matrix` runs each payload in its own microVM with the production network
+policy and warden lane. On the Vultr VX1 host: **17/17 contained** (published at
+`backend/windowsticker/escape_matrix.json`, shown on /methodology).
+
+The first local run reported 3 "escapes". All three were wrong judges, not escapes, and each judge
+now tests the outcome that matters:
+
+| Payload | First judge said | What actually happened | Judge now checks |
+|---|---|---|---|
+| direct-udp-dns | escaped (got a reply) | the runtime intercepts port 53 and answers NXDOMAIN for example.com, a domain that exists, so nothing was forwarded | escaped only if real answer records come back |
+| private-network | escaped (TCP connected) | the runtime accepts port-80 connections and replies with its own `403 network_policy_denied` | escaped only on a response that is not the runtime's denial |
+| env-secrets | escaped (`GPG_KEY` visible) | that is the Python image's public release-signing key id | escaped only if a real host secret *value* appears in the guest |

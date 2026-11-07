@@ -258,6 +258,33 @@ def probe_sandbox(
     asyncio.run(main())
 
 
+@app.command("escape-matrix")
+def escape_matrix(
+    out: Path = typer.Option(Path("artifacts/escape-matrix.json")),
+    only: list[str] = typer.Option(None, help="Run only these payload ids"),
+) -> None:
+    """Run every hostile payload in its own microVM and record contained / escaped."""
+    from windowsticker.escape import run_matrix
+    from windowsticker.sandbox.microsandbox_driver import MicrosandboxDriver
+    from windowsticker.warden.proxy import EgressWarden
+
+    settings = get_settings()
+
+    async def main() -> None:
+        data = await run_matrix(
+            MicrosandboxDriver(), EgressWarden(), settings.sandbox_image, only or None
+        )
+        out.parent.mkdir(parents=True, exist_ok=True)
+        data["measured_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        out.write_text(json.dumps(data, indent=2))
+        for r in data["results"]:
+            mark = "[green]contained[/]" if r["contained"] else "[red]ESCAPED[/]"
+            console.print(f"{mark}  {r['id']:20} {r['evidence'][:110]}")
+        console.print(f"{data['contained']}/{data['total']} contained → {out}")
+
+    asyncio.run(main())
+
+
 @app.command("regrade")
 def regrade(path: Path = typer.Argument(..., help="A test's artifact directory")) -> None:
     """Re-grade stored runs with the current tripwires (no runs, no model calls)."""

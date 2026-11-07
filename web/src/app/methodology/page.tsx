@@ -9,20 +9,86 @@ type Measurements = {
   inference: { model: string; kind: string; latency_s: number; note: string }[];
 };
 
-async function measurements(): Promise<Measurements | null> {
+type EscapeMatrix = {
+  host_kernel: string;
+  image: string;
+  measured_at: string;
+  contained: number;
+  total: number;
+  secrets_checked: number;
+  results: { id: string; category: string; attempt: string; contained: boolean; evidence: string; duration_s: number }[];
+};
+
+async function fetchJson<T>(path: string): Promise<T | null> {
   try {
     const origin = process.env.WSK_API_ORIGIN ?? "http://127.0.0.1:8765";
-    const res = await fetch(`${origin}/api/measurements`, { cache: "no-store" });
-    return res.ok ? ((await res.json()) as Measurements) : null;
+    const res = await fetch(`${origin}${path}`, { cache: "no-store" });
+    return res.ok ? ((await res.json()) as T) : null;
   } catch {
     return null;
   }
 }
 
+const measurements = () => fetchJson<Measurements>("/api/measurements");
+const escapeMatrix = () => fetchJson<EscapeMatrix>("/api/escape-matrix");
+
+const CATEGORY_LABEL: Record<string, string> = {
+  exfiltration: "Getting data out",
+  credentials: "Finding credentials",
+  lateral: "Reaching other systems",
+  isolation: "Breaking isolation",
+  resources: "Exhausting the host",
+};
+
+function EscapeTable({ m }: { m: EscapeMatrix }) {
+  const groups = Object.keys(CATEGORY_LABEL).filter((c) => m.results.some((r) => r.category === c));
+  return (
+    <section className="mt-12">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <h2 className={H2}>Escape matrix</h2>
+        <span className="rounded-full bg-ink px-3 py-1 font-mono text-[12px] font-semibold text-yellow">
+          {m.contained}/{m.total} contained
+        </span>
+      </div>
+      <p className="mt-2 text-[15px] leading-relaxed text-ink-2">
+        Each hostile payload runs in its own fresh microVM with exactly the network policy and warden lane a crash-test
+        run gets. A mechanical check decides &ldquo;contained&rdquo; from what the payload printed, what the warden
+        logged and what the host observed. Measured {m.measured_at.slice(0, 10)} on the Vultr host (kernel{" "}
+        {m.host_kernel}), compared against {m.secrets_checked} real host secrets. Re-run with{" "}
+        <code className="font-mono text-[13px]">windowsticker escape-matrix</code>.
+      </p>
+      <div className="mt-5 space-y-5">
+        {groups.map((g) => (
+          <div key={g}>
+            <h3 className="mb-2 font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+              {CATEGORY_LABEL[g]}
+            </h3>
+            <ul className="overflow-hidden rounded-xl border border-rule bg-card">
+              {m.results
+                .filter((r) => r.category === g)
+                .map((r) => (
+                  <li key={r.id} className="grid gap-1 border-b border-rule px-4 py-3 last:border-0 md:grid-cols-[1fr_auto_1.3fr] md:items-center md:gap-4">
+                    <span className="text-[14px] font-semibold">{r.attempt}</span>
+                    <span
+                      className={`w-fit rounded px-2 py-0.5 font-mono text-[11px] font-semibold uppercase ${r.contained ? "bg-green-soft text-green" : "bg-red text-white"}`}
+                    >
+                      {r.contained ? "contained" : "escaped"}
+                    </span>
+                    <span className="text-[13px] text-ink-2">{r.evidence}</span>
+                  </li>
+                ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 const H2 = "font-display text-[24px] font-extrabold tracking-tight";
 
 export default async function MethodologyPage() {
-  const [m, meth] = await Promise.all([measurements(), api.methodology()]);
+  const [m, meth, esc] = await Promise.all([measurements(), api.methodology(), escapeMatrix()]);
   return (
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
       <h1 className="font-display text-[38px] font-extrabold tracking-tight">Methodology</h1>
@@ -79,6 +145,8 @@ export default async function MethodologyPage() {
           <p className="mt-2 text-ink-2">Measurements unavailable.</p>
         )}
       </section>
+
+      {esc && <EscapeTable m={esc} />}
 
       <section className="mt-12 space-y-3 text-[15.5px] leading-relaxed text-ink-2">
         <h2 className={`${H2} text-ink`}>How a run is graded</h2>
