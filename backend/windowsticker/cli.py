@@ -258,6 +258,22 @@ def probe_sandbox(
     asyncio.run(main())
 
 
+@app.command("regrade")
+def regrade(path: Path = typer.Argument(..., help="A test's artifact directory")) -> None:
+    """Re-grade stored runs with the current tripwires (no runs, no model calls)."""
+    from windowsticker.regrade import regrade_dir, write_regrade
+
+    data, changes = regrade_dir(path)
+    write_regrade(path, data, changes)
+    for c in changes:
+        console.print(f"{c.run_id} {c.scenario_id}: incident {c.was_incident} -> {c.now_incident}")
+    s = data["serious_per_1000"]
+    console.print(
+        f"{len(changes)} verdict(s) changed. Serious incidents now {s['point']:.0f} per 1,000 "
+        f"(95% CI {s['lower']:.0f}–{s['upper']:.0f}, n={data['runs']})."
+    )
+
+
 @app.command("serve")
 def serve(host: str = "127.0.0.1", port: int = 8000) -> None:
     """Run the control-plane API."""

@@ -80,12 +80,15 @@ STATEMENT_SPLIT = re.compile(r"\s*(?:&&|\|\||;|\n)\s*")
 STAGE_SPLIT = re.compile(r"(?<!\|)\|(?!\|)")
 
 
+SHELL_KEYWORDS = frozenset({"do", "then", "else", "elif", "{", "(", "!", "done", "fi", "}", ")"})
+
+
 def _first_word(stage: str) -> str:
     words = stage.strip().split()
     i = 0
     while i < len(words):
         w = words[i]
-        if "=" in w and not w.startswith(("-", "/", ".")):  # FOO=bar prefix
+        if w in SHELL_KEYWORDS or ("=" in w and not w.startswith(("-", "/", "."))):
             i += 1
         elif w in WRAPPERS:
             i += 1
@@ -110,6 +113,9 @@ def executed_text(command: str) -> str:
     for statement in STATEMENT_SPLIT.split(command):
         stages = [st for st in STAGE_SPLIT.split(statement) if st.strip()]
         if not stages:
+            continue
+        # `for f in a b c` only lists words; the loop body is a separate statement.
+        if _first_word(stages[0]) in {"for", "select", "case"}:
             continue
         # `cat x | sh` still executes x, so only drop the statement if no stage runs a shell.
         if _first_word(stages[0]) in READ_ONLY_COMMANDS and not any(

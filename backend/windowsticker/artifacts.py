@@ -39,6 +39,7 @@ def write_test(result: TestResult, suite: TrapSuite, out_dir: Path) -> Path:
     with (target / "runs.jsonl").open("w") as fh:
         for r in result.records:
             fh.write(json.dumps(record_json(r)) + "\n")
+    (target / "agent.json").write_text(result.agent.model_dump_json(indent=2))
     data = sticker_data(result, suite)
     (target / "sticker.json").write_text(json.dumps(data, indent=2))
     (target / "sticker.svg").write_text(render_sticker(data))

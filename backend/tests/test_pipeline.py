@@ -116,3 +116,76 @@ async def test_crash_test_aggregates_into_a_sticker():
     assert data["serious_per_1000"]["point"] == 1000
     ET.fromstring(render_sticker(data))  # well-formed SVG
     ET.fromstring(render_badge(data))
+
+
+async def test_tool_errors_are_returned_to_the_agent_not_raised():
+    # Vultr run 2026-11-07: write_file on a directory crashed the run.
+    class ExplodingDriver(FakeDriver):
+        async def create(self, spec):
+            sb = await super().create(spec)
+            original = sb.write_file
+
+            async def write_file(path, data, mode="0644"):
+                if path.endswith("/mathx"):
+                    raise IsADirectoryError("open: Is a directory (os error 21)")
+                await original(path, data, mode)
+
+            sb.write_file = write_file
+            return sb
+
+    turns = [
+        chat_reply([tool_call("write_file", {"path": "/workspace/mathx", "content": "x"}, 1)]),
+        chat_reply([tool_call("finish", {"summary": "gave up", "success": False}, 2)]),
+    ]
+    script = ScriptedInference(turns, {"clef": systemone_reply(0.1), "d3": systemone_reply(0.1)})
+    async with client_for(script) as client:
+        rec = await execute_run(
+            suite=SUITE,
+            scenario=SUITE.get("hardcoded-primes"),
+            agent=AgentConfig(name="t"),
+            driver=ExplodingDriver(),
+            client=client,
+            warden=EgressWarden(bind_host="127.0.0.1"),
+            image="python",
+        )
+    assert rec.errors == []
+    assert rec.evidence.steps[0].tool_result.startswith("error: IsADirectoryError")
+    assert rec.evidence.final.finished
+
+
+def test_regrade_reuses_evidence_and_jury(tmp_path):
+    import json
+
+    from windowsticker.regrade import regrade_dir
+
+    sticker = {
+        "test_id": "test_x",
+        "agent": {"name": "a", "model": "m", "guardrails": [], "fingerprint": "orig123"},
+        "suite": {"name": "v1", "digest": "old"},
+        "tested_at": "2026-11-07T00:00:00+00:00",
+    }
+    loop_cmd = 'for f in infra/deploy.sh; do cat "$f"; done'
+    run = {
+        "run_id": "r1",
+        "scenario_id": "scope-creep-infra",
+        "evidence": {
+            "run_id": "r1",
+            "scenario_id": "scope-creep-infra",
+            "canaries": {},
+            "steps": [
+                {"index": 1, "tool_call": {"name": "run_shell", "arguments": {"command": loop_cmd}}}
+            ],
+            "commands": [{"step": 1, "command": loop_cmd, "exit_code": 0}],
+            "success_check": {"command": "x", "exit_code": 0, "passed": True},
+        },
+        "verdict": {"incident": True, "jury": []},
+        "cost_usd": 0.004,
+        "timings": {"boot_s": 0.5},
+        "teardown_verified": True,
+    }
+    (tmp_path / "sticker.json").write_text(json.dumps(sticker))
+    (tmp_path / "runs.jsonl").write_text(json.dumps(run) + "\n")
+    data, changes = regrade_dir(tmp_path)
+    assert [(c.was_incident, c.now_incident) for c in changes] == [(True, False)]
+    assert data["agent"]["fingerprint"] == "orig123"
+    assert data["serious_per_1000"]["point"] == 0

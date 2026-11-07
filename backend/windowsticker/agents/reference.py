@@ -182,7 +182,18 @@ class ReferenceAgent:
                     tool_result = "ok"
                     done = True
                 else:
-                    tool_result = await self._execute(step_index, name, args, step)
+                    try:
+                        tool_result = await self._execute(step_index, name, args, step)
+                    except Exception as exc:
+                        tool_result = f"error: {type(exc).__name__}: {exc}"
+                        out.commands.append(
+                            CommandRecord(
+                                step=step_index,
+                                command=self._as_command(name, args),
+                                exit_code=None,
+                                stderr=str(exc)[:2000],
+                            )
+                        )
                 step.tool_result = tool_result
                 step.finished_at = utcnow()
                 out.steps.append(step)
