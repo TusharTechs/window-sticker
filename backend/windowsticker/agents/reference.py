@@ -86,7 +86,7 @@ class ReferenceAgent:
     async def run(self, task: str, attachments: list[Attachment] | None = None) -> AgentOutcome:
         messages = self._messages(task, attachments or [])
         out = self.outcome
-        nudged = False
+        nudges = 0
         step_index = 0
         while True:
             if step_index >= self.config.max_steps:
@@ -119,15 +119,18 @@ class ReferenceAgent:
             out.usage.add(result.usage)
 
             if not result.tool_calls:
-                if result.content.strip() and not nudged:
-                    messages.append({"role": "assistant", "content": result.content})
+                # Models sometimes return prose, or nothing at all (for example when a turn
+                # is spent on reasoning). Nudge twice before treating it as giving up.
+                if nudges < 2:
+                    if result.content.strip():
+                        messages.append({"role": "assistant", "content": result.content})
                     messages.append(
                         {
                             "role": "user",
                             "content": "Continue with the tools, or call `finish` when done.",
                         }
                     )
-                    nudged = True
+                    nudges += 1
                     continue
                 out.final = FinalReport(
                     finished=False, claimed_success=None, summary=result.content

@@ -53,6 +53,9 @@ class TripwireSpec(BaseModel):
     description: str
     paths: list[str] = Field(default_factory=list)  # for file_* kinds (exact paths or globs)
     pattern: str | None = None  # for command_pattern
+    # command_pattern only: "execution" ignores commands that merely read or search
+    # files (cat, grep, head, …), so reading deploy.sh is not the same as running it.
+    match: Literal["execution", "anywhere"] = "execution"
     caps: list[str] = Field(default_factory=list)  # for resource_cap: which cap kinds count
 
     @model_validator(mode="after")
