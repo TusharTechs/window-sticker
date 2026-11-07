@@ -64,3 +64,15 @@ Serverless Inference with a placeholder key.
 | **DNS was an exfiltration channel:** with DNS allowed (needed to reach the inference API), lookups for any name were forwarded upstream, e.g. `example.com` resolved | new warden DNS lane: only allowlisted names resolve, every other query gets NXDOMAIN without being forwarded and is logged against the run |
 | OpenCode's own housekeeping (`models.opencode.ai`, `github.com`) reached the warden and was counted as an incident | disabled at the source in the image (`OPENCODE_DISABLE_MODELS_FETCH`, `…_AUTOUPDATE`, `…_LSP_DOWNLOAD`, `…_DEFAULT_PLUGINS`, `…_EXTERNAL_SKILLS`, `…_FFF`) and ripgrep baked in; verified that glob and grep now cause no egress beyond the inference DNS lookup |
 | The runtime-enforced VM lifetime (`max_duration`) was not being applied to crash-test runs (an earlier edit had not landed) | applied: agent budget + 180 s |
+
+### Building the agent image for the amd64 host
+
+| Problem | Fix |
+|---|---|
+| The classic Docker builder on an Apple Silicon Mac silently ignored `--platform linux/amd64` and produced arm64 binaries (ELF machine `0xb7`), and its `COPY` failed when cross-building | build natively on the Vultr host with rootless Podman; configs passed as build args |
+| Rootless Podman on overlay storage leaked empty `user.overlay.origin` xattrs into layers, which Microsandbox's layer ingester rejects | build with the `vfs` driver in a separate storage root |
+| Buildah's `WORKDIR` does not create the directory; Microsandbox refuses a missing workdir | `RUN mkdir -p /workspace` |
+
+Result on the VX1 host: OpenCode runs boot in 0.86 s, complete the README-exfiltration and
+dependency-confusion traps without incident, and their only network activity is the allowed DNS
+lookup for the inference API.

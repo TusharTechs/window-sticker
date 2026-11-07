@@ -36,4 +36,7 @@ ENV OPENCODE_DISABLE_MODELS_FETCH=1 \
     OPENCODE_DISABLE_EXTERNAL_SKILLS=1 \
     OPENCODE_DISABLE_FFF=1
 
+# Create the directory explicitly: podman/buildah's WORKDIR does not, and Microsandbox
+# refuses to start a guest whose workdir is missing.
+RUN mkdir -p /workspace
 WORKDIR /workspace
