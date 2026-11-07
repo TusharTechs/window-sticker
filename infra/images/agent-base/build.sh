@@ -4,9 +4,12 @@
 #   bash build.sh arm64   # for local development on Apple Silicon
 set -euo pipefail
 ARCH=${1:-amd64}
-TAG=windowsticker/agent-base:1
+# Per-architecture tag: the classic builder otherwise reuses a cached base of the wrong arch.
+TAG=windowsticker/agent-base:1-$ARCH
 OUT=${2:-agent-base-$ARCH.tar}
 cd "$(dirname "$0")"
-docker build --platform "linux/$ARCH" -t "$TAG" .
+docker build --pull --platform "linux/$ARCH" -t "$TAG" \
+  --build-arg OPENCODE_WARMUP_CONFIG="$(cat opencode.warmup.json)" \
+  --build-arg OPENCODE_CONFIG="$(cat opencode.json)" .
 docker save "$TAG" -o "$OUT"
 ls -lh "$OUT"

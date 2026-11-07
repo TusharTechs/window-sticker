@@ -290,11 +290,20 @@ def create_app(
                 .scalars()
                 .all()
             )
+        def strength(t: TestRow) -> tuple[bool, int, float]:
+            s = t.sticker or {}
+            finished = t.finished_at.timestamp() if t.finished_at else 0.0
+            return (not s.get("provisional", True), int(s.get("runs", 0)), finished)
+
         best: dict[str, TestRow] = {}
-        for t in rows:  # newest full-suite test per agent fingerprint
-            if t.scenarios:  # focused tests (one trap) are for A/B, not the leaderboard
+        for t in rows:
+            if t.scenarios or not t.sticker:  # focused tests (one trap) are for A/B, not ranking
                 continue
-            best.setdefault(t.agent_fingerprint, t)
+            # Per agent configuration keep the strongest evidence: rated over provisional,
+            # then more runs, then newer. A small smoke test never displaces a full test.
+            cur = best.get(t.agent_fingerprint)
+            if cur is None or strength(t) > strength(cur):
+                best[t.agent_fingerprint] = t
         out = [_test_out(t) for t in best.values() if t.sticker]
         out.sort(
             key=lambda t: (

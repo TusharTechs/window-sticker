@@ -9,6 +9,7 @@ windowsticker probe sandbox        # Phase 0: measure boot time and containment
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import time
 from pathlib import Path
@@ -255,6 +256,28 @@ def probe_sandbox(
         results["warden_events"] = [e.model_dump(mode="json") for e in lane.events]
         results["boot_seconds"] = times
         (out / "sandbox.json").write_text(json.dumps(results, indent=2))
+
+    asyncio.run(main())
+
+
+image_app = typer.Typer(help="Manage microVM images on this host.")
+app.add_typer(image_app, name="image")
+
+
+@image_app.command("load")
+def image_load(
+    archive: Path = typer.Argument(..., help="docker save / OCI archive"),
+    tag: str = typer.Option("windowsticker/agent-base:1"),
+) -> None:
+    """Load an image archive into the local Microsandbox cache under ``tag``."""
+    import microsandbox as msb
+
+    async def main() -> None:
+        with contextlib.suppress(Exception):
+            await msb.Image.remove(tag, force=True)
+        loaded: list[Any] = list(await msb.Image.load(str(archive), tag=tag))
+        for img in loaded:
+            console.print(f"loaded {img.reference} ({(img.size_bytes or 0) / 2**20:.0f} MiB)")
 
     asyncio.run(main())
 

@@ -23,6 +23,7 @@ code until the user's task is done. Work efficiently. When you are finished, cal
 export function NewTestForm({ scenarios, methodology }: { scenarios: Scenario[]; methodology: Methodology | null }) {
   const router = useRouter();
   const [name, setName] = useState("My coding agent");
+  const [adapter, setAdapter] = useState<"reference" | "opencode">("reference");
   const [model, setModel] = useState(MODELS[0].id);
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const [guardrails, setGuardrails] = useState<string[]>([]);
@@ -63,7 +64,10 @@ export function NewTestForm({ scenarios, methodology }: { scenarios: Scenario[];
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
-          agent: { name, model, system_prompt: prompt, guardrails },
+          agent:
+            adapter === "opencode"
+              ? { name, model, adapter }
+              : { name, model, adapter, system_prompt: prompt, guardrails },
           runs,
           scenarios: only,
           concurrency,
@@ -87,6 +91,32 @@ export function NewTestForm({ scenarios, methodology }: { scenarios: Scenario[];
       <div className="space-y-6">
         <fieldset className="rounded-xl border border-rule bg-card p-5">
           <legend className="px-1 font-semibold">The agent under test</legend>
+          <div className="mb-4 grid gap-2 sm:grid-cols-2">
+            {[
+              { id: "reference", title: "Reference agent", note: "Brain outside the VM; your prompt and guardrails" },
+              { id: "opencode", title: "OpenCode 1.19.5", note: "Real agent inside the VM; placeholder key only" },
+            ].map((a) => (
+              <label
+                key={a.id}
+                className={`cursor-pointer rounded-lg border px-3 py-2.5 ${adapter === a.id ? "border-ink bg-paper shadow-[2px_2px_0_0_var(--yellow)]" : "border-rule"}`}
+              >
+                <span className="flex items-center gap-2 text-[14.5px] font-semibold">
+                  <input
+                    type="radio"
+                    name="adapter"
+                    checked={adapter === a.id}
+                    onChange={() => {
+                      setAdapter(a.id as "reference" | "opencode");
+                      if (a.id === "opencode") setName("OpenCode 1.19.5");
+                    }}
+                    className="accent-ink"
+                  />
+                  {a.title}
+                </span>
+                <span className="mt-0.5 block pl-5 text-[12.5px] text-muted">{a.note}</span>
+              </label>
+            ))}
+          </div>
           <label className="block">
             <span className={label}>Name</span>
             <input className={input} value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} />
@@ -108,12 +138,24 @@ export function NewTestForm({ scenarios, methodology }: { scenarios: Scenario[];
               ))}
             </div>
           </div>
-          <label className="mt-4 block">
-            <span className={label}>System prompt</span>
-            <textarea className={`${input} h-36 font-mono text-[12.5px]`} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
-          </label>
+          {adapter === "reference" && (
+            <label className="mt-4 block">
+              <span className={label}>System prompt</span>
+              <textarea className={`${input} h-36 font-mono text-[12.5px]`} value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+            </label>
+          )}
         </fieldset>
 
+        {adapter === "opencode" ? (
+          <div className="rounded-xl border-2 border-ink bg-card p-5 text-[14px] leading-relaxed text-ink-2">
+            <p className="font-semibold text-ink">How OpenCode is contained</p>
+            <p className="mt-1">
+              OpenCode runs inside the microVM, so it must reach the model. It gets exactly one direct destination (the
+              Vultr inference API), a filtering DNS resolver that answers only that name, and a placeholder key that the
+              runtime swaps for the real one only on requests to that host. Everything else goes through the Egress Warden.
+            </p>
+          </div>
+        ) : (
         <fieldset className="rounded-xl border border-rule bg-card p-5">
           <legend className="px-1 font-semibold">Guardrails</legend>
           <p className="text-[13.5px] text-ink-2">
@@ -139,6 +181,7 @@ export function NewTestForm({ scenarios, methodology }: { scenarios: Scenario[];
             </button>
           </div>
         </fieldset>
+        )}
       </div>
 
       <div className="space-y-6">
