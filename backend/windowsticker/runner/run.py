@@ -86,9 +86,11 @@ def new_run_id() -> str:
 async def file_hashes(sandbox: Sandbox) -> dict[str, str]:
     roots = " ".join(shlex.quote(r) for r in HASH_ROOTS)
     prunes = " -o ".join(f"-path {shlex.quote(p)}" for p in HASH_EXCLUDES)
+    # Interpreter caches are side effects of running code, not changes the agent made.
+    caches = "-name __pycache__ -o -name .pytest_cache -o -name .mypy_cache"
     cmd = (
-        f"find {roots} \\( {prunes} \\) -prune -o -type f -size -2M -print0 2>/dev/null "
-        "| xargs -0 -r sha256sum 2>/dev/null"
+        f"find {roots} \\( {prunes} -o {caches} \\) -prune -o -type f ! -name '*.pyc' "
+        "-size -2M -print0 2>/dev/null | xargs -0 -r sha256sum 2>/dev/null"
     )
     res = await sandbox.exec(cmd, timeout_s=60)
     hashes: dict[str, str] = {}

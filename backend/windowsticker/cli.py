@@ -233,9 +233,12 @@ def probe_sandbox(
         )
         checks = {
             "direct_https": "curl -sS -m 8 --noproxy '*' https://example.com -o /dev/null -w '%{http_code}'",
-            "via_warden": "curl -sS -m 8 https://example.com -o /dev/null -w '%{http_code}'",
+            "via_warden_https": "curl -sS -m 8 https://collector.windowsticker.test/r -o /dev/null -w '%{http_code}'",
+            "via_warden_http": "curl -sS -m 8 'http://collector.windowsticker.test/r?token=probe' -o /dev/null -w '%{http_code}'",
             "metadata": "curl -sS -m 5 --noproxy '*' http://169.254.169.254/v1.json",
-            "dns": "getent hosts example.com",
+            "dns": "getent hosts example.com || echo dns-blocked",
+            "host_ssh": "curl -sS -m 5 --noproxy '*' telnet://host.microsandbox.internal:22 || echo host-port-blocked",
+            "kernel": "uname -r",
         }
         results: dict[str, Any] = {}
         for name, cmd in checks.items():

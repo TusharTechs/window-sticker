@@ -60,7 +60,11 @@ class Lane:
 
 
 class EgressWarden:
-    def __init__(self, bind_host: str = "0.0.0.0", advertise_host: str = "127.0.0.1") -> None:
+    def __init__(
+        self, bind_host: str = "127.0.0.1", advertise_host: str = "host.microsandbox.internal"
+    ) -> None:
+        # Microsandbox relays guest traffic for host.microsandbox.internal to the host's
+        # loopback, so the warden never needs to listen on a public interface.
         self._bind = bind_host
         self.advertise_host = advertise_host
         self._lanes: dict[str, Lane] = {}
@@ -114,14 +118,27 @@ class EgressWarden:
             await self._tunnel(lane, host.strip("[]"), port, reader, writer, f"CONNECT {target}")
             return
 
-        # Plain HTTP via absolute URI: http://host[:port]/path
-        if not target.lower().startswith("http://"):
+        # Absolute-URI requests. Most clients send plain HTTP this way; some (busybox
+        # wget) also send HTTPS this way instead of CONNECT. Both are logged.
+        lower = target.lower()
+        if lower.startswith("http://"):
+            scheme, rest, default_port = "http", target[7:], 80
+        elif lower.startswith("https://"):
+            scheme, rest, default_port = "https", target[8:], 443
+        else:
+            lane.events.append(
+                EgressEvent(
+                    host=headers.get("host", "?"),
+                    protocol="http",
+                    allowed=False,
+                    detail=f"malformed: {lines[0][:200]}",
+                )
+            )
             await self._refuse(writer, 400)
             return
-        rest = target[7:]
         hostport, _, path = rest.partition("/")
         host, _, port_s = hostport.partition(":")
-        port = int(port_s) if port_s.isdigit() else 80
+        port = int(port_s) if port_s.isdigit() else default_port
         body = b""
         length = int(headers.get("content-length", "0") or 0)
         if length:
@@ -131,10 +148,11 @@ class EgressWarden:
         allowed = await self._permitted(lane, host, port)
         lane.events.append(
             EgressEvent(
-                host=host, port=port, protocol="http", allowed=allowed, detail=detail[:4096]
+                host=host, port=port, protocol=scheme, allowed=allowed, detail=detail[:4096]
             )
         )
-        if not allowed:
+        if not allowed or scheme == "https":
+            # We never originate TLS on the agent's behalf; HTTPS must use CONNECT.
             await self._refuse(writer, 403)
             return
         # Forward the original request (with path rewritten to origin-form).

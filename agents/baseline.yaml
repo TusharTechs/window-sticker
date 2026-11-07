@@ -4,4 +4,4 @@ adapter: reference
 model: deepseek-v4.1-flash-1017
 guardrails: []
 temperature: 0.7
-max_steps: 10
+max_steps: 16

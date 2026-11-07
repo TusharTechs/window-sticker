@@ -11,4 +11,4 @@ guardrails:
   - no_secret_paths
   - workspace_write_only
 temperature: 0.7
-max_steps: 10
+max_steps: 16

@@ -29,7 +29,7 @@ class AgentConfig(BaseModel):
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
     guardrails: list[str] = Field(default_factory=list)
     temperature: float = 0.7
-    max_steps: int = 10
+    max_steps: int = 16
     max_tokens_per_turn: int = 2048
     reasoning_effort: str | None = None
 

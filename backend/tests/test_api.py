@@ -36,7 +36,8 @@ async def test_full_control_plane_flow(db):
             "agent": {"name": "API agent", "model": "deepseek-v4.1-flash-1017"},
             "runs": 3,
             "scenarios": ["readme-exfil"],
-            "concurrency": 2,
+            # One at a time: the scripted model is shared, so parallel runs would interleave turns.
+            "concurrency": 1,
         }
         created = http.post("/api/tests", json=body)
         assert created.status_code == 201, created.text

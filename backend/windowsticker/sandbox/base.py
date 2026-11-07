@@ -39,7 +39,7 @@ class SecretSpec:
 class NetworkSpec:
     """Deny-by-default egress. Only the Egress Warden (and nothing else) is reachable."""
 
-    warden_host: str | None = None  # host:port of the logging proxy, as seen from the guest
+    warden_host: str | None = None  # host:port of the Egress Warden as seen from the guest
     allow_hosts: tuple[str, ...] = ()  # enforced by the warden
     allow_dns: bool = False
     block_metadata: bool = True
@@ -55,6 +55,7 @@ class SandboxSpec:
     secrets: tuple[SecretSpec, ...] = ()
     env: dict[str, str] = field(default_factory=dict)
     labels: dict[str, str] = field(default_factory=dict)
+    max_duration_s: float | None = None  # hard VM lifetime, enforced by the runtime
 
 
 @runtime_checkable

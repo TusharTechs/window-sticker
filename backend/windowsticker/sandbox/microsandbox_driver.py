@@ -1,8 +1,13 @@
 """Microsandbox driver: one libkrun microVM (own kernel) per run, on a KVM host.
 
 This is the isolation tier Vultr's own agent-sandboxing guide uses on VX1 instances.
-Every option here maps to a documented SDK parameter:
-https://docs.microsandbox.dev/sdk/python/sandbox.md
+Verified against microsandbox 0.7.13 (see docs/MEASUREMENTS.md):
+
+* the network policy denies all egress by default; DNS is not allowed at all;
+* the only open path is TCP to ``host.microsandbox.internal`` on the run's warden port,
+  and the guest is told to use it through the standard proxy variables;
+* the runtime itself refuses direct connections, private ranges and metadata (403);
+* ``max_duration`` makes the runtime kill the VM even if the harness hangs.
 """
 
 from __future__ import annotations
@@ -15,13 +20,11 @@ from typing import Any
 
 from windowsticker.sandbox.base import ExecResult, SandboxSpec
 
+msb: Any
 try:  # The SDK is optional so the rest of the package installs anywhere.
     import microsandbox as msb
 except ImportError:  # pragma: no cover - exercised only where the SDK is missing
     msb = None
-
-
-METADATA_CIDRS = ("169.254.0.0/16", "fd00:ec2::254/128", "100.100.100.200/32")
 
 
 def _require_sdk() -> Any:
@@ -34,12 +37,9 @@ def _require_sdk() -> Any:
 
 
 def build_network(spec: SandboxSpec) -> Any:
-    """Deny-all egress, then allow exactly one TCP port on the host: the Egress Warden."""
+    """Deny everything, then allow exactly one TCP port on the host: the Egress Warden."""
     sdk = _require_sdk()
     rules: list[Any] = []
-    # Explicit metadata denies come first so no later allow can ever reach them.
-    if spec.network.block_metadata:
-        rules += [sdk.Rule.deny(destination=cidr) for cidr in METADATA_CIDRS]
     if spec.network.allow_dns:
         rules += list(sdk.Rule.allow_dns())
     if spec.network.warden_host:
@@ -56,9 +56,7 @@ def build_network(spec: SandboxSpec) -> Any:
         default_ingress=sdk.Action.DENY,
         rules=tuple(rules),
     )
-    return sdk.Network(
-        policy=policy, secret_violation_action=sdk.ViolationAction.BLOCK_AND_TERMINATE
-    )
+    return sdk.Network(policy=policy)
 
 
 def build_secrets(spec: SandboxSpec) -> list[Any]:
@@ -74,6 +72,15 @@ def build_secrets(spec: SandboxSpec) -> list[Any]:
             sdk.Secret.env(s.env, value=s.value, allow=list(s.allow_hosts), violation_action=action)
         )
     return out
+
+
+def proxy_env(warden_host: str) -> dict[str, str]:
+    url = f"http://{warden_host}"
+    env = {}
+    for name in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"):
+        env[name] = url
+    env["no_proxy"] = env["NO_PROXY"] = ""
+    return env
 
 
 class MicrosandboxSandbox:
@@ -99,9 +106,9 @@ class MicrosandboxSandbox:
         except sdk.ExecTimeoutError:
             return ExecResult(None, "", "timed out", time.perf_counter() - started, timed_out=True)
         return ExecResult(
-            exit_code=getattr(out, "exit_code", None),
-            stdout=getattr(out, "stdout_text", "") or "",
-            stderr=getattr(out, "stderr_text", "") or "",
+            exit_code=out.exit_code,
+            stdout=out.stdout_text or "",
+            stderr=out.stderr_text or "",
             duration_s=time.perf_counter() - started,
         )
 
@@ -119,9 +126,11 @@ class MicrosandboxSandbox:
         if not self._alive:
             return
         self._alive = False
-        with contextlib.suppress(Exception):
-            await self._sb.kill()
         sdk = _require_sdk()
+        # Kill may race with a VM the runtime already terminated (secret violation or
+        # max_duration), and remove may find it already gone; both are fine.
+        with contextlib.suppress(Exception):
+            await self._sb.kill(timeout=10)
         with contextlib.suppress(Exception):
             await sdk.Sandbox.remove(self._name)
 
@@ -129,34 +138,29 @@ class MicrosandboxSandbox:
 class MicrosandboxDriver:
     kind = "microsandbox"
 
-    def __init__(self, *, replace: bool = True) -> None:
-        self._replace = replace
-
     async def create(self, spec: SandboxSpec) -> MicrosandboxSandbox:
         sdk = _require_sdk()
+        env = dict(spec.env)
+        if spec.network.warden_host:
+            env.update(proxy_env(spec.network.warden_host))
         kwargs: dict[str, Any] = {
             "image": spec.image,
             "cpus": spec.cpus,
             "memory": spec.memory_mib,
             "network": build_network(spec),
-            "replace": self._replace,
+            "replace": True,
+            "env": env,
+            "labels": dict(spec.labels),
         }
+        if spec.max_duration_s:
+            kwargs["max_duration"] = spec.max_duration_s
         if spec.secrets:
             kwargs["secrets"] = build_secrets(spec)
-        if spec.env:
-            kwargs["env"] = dict(spec.env)
-        if spec.labels:
-            kwargs["labels"] = dict(spec.labels)
-        if spec.network.warden_host:
-            kwargs["proxy"] = f"http://{spec.network.warden_host}"
+            kwargs["secret_violation_action"] = sdk.ViolationAction.BLOCK_AND_TERMINATE
         handle = await sdk.Sandbox.create(spec.name, **kwargs)
         return MicrosandboxSandbox(handle, spec.name)
 
     async def live(self, label_key: str, label_value: str) -> list[str]:
         sdk = _require_sdk()
-        names: list[str] = []
-        for info in await sdk.Sandbox.list():
-            labels = getattr(info, "labels", {}) or {}
-            if labels.get(label_key) == label_value:
-                names.append(getattr(info, "name", "?"))
-        return names
+        page = await sdk.Sandbox.list_with(labels={label_key: label_value})
+        return [h.name for h in page.sandboxes]
