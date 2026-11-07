@@ -71,8 +71,13 @@ class InferenceClient:
             transport=transport,
         )
         self._max_retries = max_retries
+        self._api_key = api_key
         self._prices: dict[str, ModelPrice] | None = None
         self._price_lock = asyncio.Lock()
+
+    def secret_for_sandbox(self) -> str:
+        """The key, for a Microsandbox placeholder secret. It never enters the guest."""
+        return self._api_key
 
     async def aclose(self) -> None:
         await self._http.aclose()

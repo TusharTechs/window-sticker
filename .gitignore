@@ -28,3 +28,6 @@ artifacts/
 
 # local tooling
 .claude/
+
+# built image archives
+infra/images/**/*.tar

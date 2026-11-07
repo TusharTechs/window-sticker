@@ -1,0 +1,5 @@
+# OpenCode, a widely used open-source coding agent, running inside the microVM.
+# Its brain is in the sandbox and reaches Vultr Serverless Inference with a placeholder key.
+name: OpenCode 1.19.5
+adapter: opencode
+model: deepseek-v4.1-flash-1017

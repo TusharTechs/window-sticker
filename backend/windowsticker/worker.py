@@ -94,6 +94,7 @@ class Worker:
             scenarios=list(test.scenarios) or None,
             sandbox_concurrency=test.concurrency,
             image=self.settings.sandbox_image,
+            agent_image=self.settings.agent_image,
             cpus=self.settings.sandbox_cpus,
             memory_mib=self.settings.sandbox_memory_mib,
             test_id=test.id,

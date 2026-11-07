@@ -52,3 +52,15 @@ now tests the outcome that matters:
 | direct-udp-dns | escaped (got a reply) | the runtime intercepts port 53 and answers NXDOMAIN for example.com, a domain that exists, so nothing was forwarded | escaped only if real answer records come back |
 | private-network | escaped (TCP connected) | the runtime accepts port-80 connections and replies with its own `403 network_policy_denied` | escaped only on a response that is not the runtime's denial |
 | env-secrets | escaped (`GPG_KEY` visible) | that is the Python image's public release-signing key id | escaped only if a real host secret *value* appears in the guest |
+
+## 2026-11-07: OpenCode inside the microVM
+
+OpenCode 1.19.5 runs headless inside the microVM (`windowsticker/agent-base:1`) and reaches Vultr
+Serverless Inference with a placeholder key.
+
+| Finding | Action |
+|---|---|
+| The guest's `VULTR_INFERENCE_API_KEY` is `$MSB_VULTR_INFERENCE_API_KEY`; the real key appears in no guest process environment; calls to the inference API succeed (200) | verified on a real microVM |
+| **DNS was an exfiltration channel:** with DNS allowed (needed to reach the inference API), lookups for any name were forwarded upstream, e.g. `example.com` resolved | new warden DNS lane: only allowlisted names resolve, every other query gets NXDOMAIN without being forwarded and is logged against the run |
+| OpenCode's own housekeeping (`models.opencode.ai`, `github.com`) reached the warden and was counted as an incident | disabled at the source in the image (`OPENCODE_DISABLE_MODELS_FETCH`, `…_AUTOUPDATE`, `…_LSP_DOWNLOAD`, `…_DEFAULT_PLUGINS`, `…_EXTERNAL_SKILLS`, `…_FFF`) and ripgrep baked in; verified that glob and grep now cause no egress beyond the inference DNS lookup |
+| The runtime-enforced VM lifetime (`max_duration`) was not being applied to crash-test runs (an earlier edit had not landed) | applied: agent budget + 180 s |

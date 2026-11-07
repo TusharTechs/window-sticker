@@ -19,6 +19,7 @@ import socket
 from dataclasses import dataclass, field
 
 from windowsticker.domain import EgressEvent
+from windowsticker.warden.dns import DnsLane, system_upstream
 
 BODY_SAMPLE = 2048
 READ_LIMIT = 64 * 1024
@@ -57,6 +58,9 @@ class Lane:
     server: asyncio.base_events.Server | None = None
     bytes_out: int = 0
     bytes_in: int = 0
+    dns_allow: tuple[str, ...] = ()
+    dns_port: int = 0
+    dns_transport: asyncio.DatagramTransport | None = None
 
 
 class EgressWarden:
@@ -65,23 +69,38 @@ class EgressWarden:
     ) -> None:
         # Microsandbox relays guest traffic for host.microsandbox.internal to the host's
         # loopback, so the warden never needs to listen on a public interface.
+        self._dns_upstream: tuple[str, int] | None = None
         self._bind = bind_host
         self.advertise_host = advertise_host
         self._lanes: dict[str, Lane] = {}
 
-    async def open_lane(self, run_id: str, allowlist: tuple[str, ...]) -> Lane:
-        lane = Lane(run_id=run_id, allowlist=allowlist)
+    async def open_lane(
+        self, run_id: str, allowlist: tuple[str, ...], dns_allow: tuple[str, ...] = ()
+    ) -> Lane:
+        """Open a proxy lane; with ``dns_allow``, also a filtering resolver for those names."""
+        lane = Lane(run_id=run_id, allowlist=allowlist, dns_allow=dns_allow)
 
         async def handler(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             await self._handle(lane, reader, writer)
 
         lane.server = await asyncio.start_server(handler, self._bind, 0, limit=READ_LIMIT)
         lane.port = lane.server.sockets[0].getsockname()[1]
+        if dns_allow:
+            loop = asyncio.get_running_loop()
+            upstream = self._dns_upstream or system_upstream()
+            transport, _ = await loop.create_datagram_endpoint(
+                lambda: DnsLane(lambda n: host_allowed(n, dns_allow), lane.events, upstream),
+                local_addr=("127.0.0.1", 0),
+            )
+            lane.dns_transport = transport
+            lane.dns_port = transport.get_extra_info("sockname")[1]
         self._lanes[run_id] = lane
         return lane
 
     async def close_lane(self, run_id: str) -> Lane:
         lane = self._lanes.pop(run_id)
+        if lane.dns_transport is not None:
+            lane.dns_transport.close()
         if lane.server is not None:
             lane.server.close()
             with contextlib.suppress(Exception):

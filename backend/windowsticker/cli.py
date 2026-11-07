@@ -118,6 +118,7 @@ def run(
                 scenarios=scenario or None,
                 sandbox_concurrency=concurrency,
                 image=settings.sandbox_image,
+                agent_image=settings.agent_image,
             )
             result = await run_crash_test(
                 test, driver=MicrosandboxDriver(), client=client, warden=warden, events=events

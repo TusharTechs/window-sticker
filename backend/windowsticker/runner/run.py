@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from windowsticker.agents.config import AgentConfig
+from windowsticker.agents.opencode import INFERENCE_HOST, OpenCodeAgent
 from windowsticker.agents.reference import Attachment, EventSink, ReferenceAgent, _noop
 from windowsticker.domain import (
     CapEvent,
@@ -31,7 +32,7 @@ from windowsticker.grading.fusion import fuse
 from windowsticker.grading.jury import DEFAULT_JURORS, convene
 from windowsticker.grading.tripwires import evaluate_tripwires
 from windowsticker.inference.client import InferenceClient, Usage
-from windowsticker.sandbox.base import NetworkSpec, Sandbox, SandboxDriver, SandboxSpec
+from windowsticker.sandbox.base import NetworkSpec, Sandbox, SandboxDriver, SandboxSpec, SecretSpec
 from windowsticker.traps.canary import make_canaries
 from windowsticker.traps.loader import TrapSuite, materialise
 from windowsticker.traps.schema import Scenario
@@ -119,6 +120,7 @@ async def execute_run(
     client: InferenceClient,
     warden: EgressWarden,
     image: str,
+    agent_image: str = "windowsticker/agent-base:1",
     cpus: int = 1,
     memory_mib: int = 1024,
     budget: RunBudget | None = None,
@@ -135,6 +137,7 @@ async def execute_run(
         client=client,
         warden=warden,
         image=image,
+        agent_image=agent_image,
         cpus=cpus,
         memory_mib=memory_mib,
         budget=budget,
@@ -154,6 +157,7 @@ async def _execute_run(
     client: InferenceClient,
     warden: EgressWarden,
     image: str,
+    agent_image: str,
     cpus: int,
     memory_mib: int,
     budget: RunBudget | None,
@@ -176,18 +180,33 @@ async def _execute_run(
 
     evidence = RunEvidence(run_id=run_id, scenario_id=scenario.id, canaries=canaries)
     agent_usage = Usage()
-    lane = await warden.open_lane(run_id, allowlist=())
+    # An agent whose brain runs inside the VM (OpenCode) must reach the inference API: it
+    # gets that one destination directly, a filtering DNS lane, and a placeholder key.
+    inside = agent.adapter == "opencode"
+    lane = await warden.open_lane(
+        run_id, allowlist=(), dns_allow=(INFERENCE_HOST,) if inside else ()
+    )
+    network = NetworkSpec(
+        warden_host=warden.address(lane),
+        direct=(f"{INFERENCE_HOST}:443",) if inside else (),
+        dns_resolver=f"127.0.0.1:{lane.dns_port}" if inside else None,
+    )
+    secrets = (
+        (SecretSpec("VULTR_INFERENCE_API_KEY", client.secret_for_sandbox(), (INFERENCE_HOST,)),)
+        if inside
+        else ()
+    )
     spec = SandboxSpec(
         name=f"wsk-{run_id}",
-        image=image,
+        image=agent_image if inside else image,
         cpus=cpus,
-        memory_mib=memory_mib,
-        network=NetworkSpec(warden_host=warden.address(lane)),
-        env={
-            "HTTP_PROXY": f"http://{warden.address(lane)}",
-            "HTTPS_PROXY": f"http://{warden.address(lane)}",
-        },
+        memory_mib=max(memory_mib, 1536) if inside else memory_mib,
+        network=network,
+        secrets=secrets,
+        intercept_tls=inside,
         labels={"wsk.run": run_id, "wsk.test": test_id},
+        # Hard VM lifetime enforced by the runtime: agent budget + setup, check and grace.
+        max_duration_s=budget.wall_clock_s + 180,
     )
     sandbox: Sandbox | None = None
     host_id = "unknown"
@@ -210,9 +229,15 @@ async def _execute_run(
             )
             for p in scenario.attachments
         ]
-        ref = ReferenceAgent(
-            agent, client, sandbox, token_budget=budget.token_budget, events=events
-        )
+        ref: ReferenceAgent | OpenCodeAgent
+        if inside:
+            ref = OpenCodeAgent(
+                agent, client, sandbox, wall_clock_s=budget.wall_clock_s, events=events
+            )
+        else:
+            ref = ReferenceAgent(
+                agent, client, sandbox, token_budget=budget.token_budget, events=events
+            )
         t1 = time.perf_counter()
         try:
             outcome = await asyncio.wait_for(

@@ -40,8 +40,15 @@ def build_network(spec: SandboxSpec) -> Any:
     """Deny everything, then allow exactly one TCP port on the host: the Egress Warden."""
     sdk = _require_sdk()
     rules: list[Any] = []
-    if spec.network.allow_dns:
+    if spec.network.allow_dns or spec.network.direct:
         rules += list(sdk.Rule.allow_dns())
+    for target in spec.network.direct:
+        host, _, port = target.rpartition(":")
+        rules.append(
+            sdk.Rule.allow(
+                destination=sdk.Destination.domain(host), protocol=sdk.Protocol.TCP, port=int(port)
+            )
+        )
     if spec.network.warden_host:
         _, _, port = spec.network.warden_host.rpartition(":")
         rules.append(
@@ -56,30 +63,30 @@ def build_network(spec: SandboxSpec) -> Any:
         default_ingress=sdk.Action.DENY,
         rules=tuple(rules),
     )
-    return sdk.Network(policy=policy)
+    if spec.network.direct and not spec.network.dns_resolver:
+        raise ValueError("direct destinations need the warden DNS lane (dns_resolver)")
+    dns = None
+    if spec.network.dns_resolver:
+        # DnsConfig lives in microsandbox.types and is not re-exported at the top level.
+        from microsandbox.types import DnsConfig
+
+        dns = DnsConfig(nameservers=(spec.network.dns_resolver,))
+    return sdk.Network(policy=policy, dns=dns)
 
 
 def build_secrets(spec: SandboxSpec) -> list[Any]:
+    # The violation action is set once on the sandbox (see create()); the per-secret
+    # argument is rejected by microsandbox 0.7.13's native layer.
     sdk = _require_sdk()
-    out = []
-    for s in spec.secrets:
-        action = (
-            sdk.ViolationAction.BLOCK_AND_TERMINATE
-            if s.terminate_on_violation
-            else sdk.ViolationAction.BLOCK_AND_LOG
-        )
-        out.append(
-            sdk.Secret.env(s.env, value=s.value, allow=list(s.allow_hosts), violation_action=action)
-        )
-    return out
+    return [sdk.Secret.env(s.env, value=s.value, allow=list(s.allow_hosts)) for s in spec.secrets]
 
 
-def proxy_env(warden_host: str) -> dict[str, str]:
+def proxy_env(warden_host: str, direct: tuple[str, ...] = ()) -> dict[str, str]:
     url = f"http://{warden_host}"
     env = {}
     for name in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"):
         env[name] = url
-    env["no_proxy"] = env["NO_PROXY"] = ""
+    env["no_proxy"] = env["NO_PROXY"] = ",".join(t.rpartition(":")[0] for t in direct)
     return env
 
 
@@ -142,7 +149,7 @@ class MicrosandboxDriver:
         sdk = _require_sdk()
         env = dict(spec.env)
         if spec.network.warden_host:
-            env.update(proxy_env(spec.network.warden_host))
+            env.update(proxy_env(spec.network.warden_host, spec.network.direct))
         kwargs: dict[str, Any] = {
             "image": spec.image,
             "cpus": spec.cpus,
@@ -154,6 +161,8 @@ class MicrosandboxDriver:
         }
         if spec.max_duration_s:
             kwargs["max_duration"] = spec.max_duration_s
+        if spec.intercept_tls:
+            kwargs["intercept_tls"] = True
         if spec.secrets:
             kwargs["secrets"] = build_secrets(spec)
             kwargs["secret_violation_action"] = sdk.ViolationAction.BLOCK_AND_TERMINATE

@@ -31,6 +31,7 @@ class Settings(BaseSettings):
 
     # Sandbox host
     sandbox_image: str = Field(default="python", alias="WSK_SANDBOX_IMAGE")
+    agent_image: str = Field(default="windowsticker/agent-base:1", alias="WSK_AGENT_IMAGE")
     warden_listen: str = Field(default="127.0.0.1:8899", alias="WSK_WARDEN_LISTEN")
 
     # Write access (starting tests, labelling runs). Reads are public.

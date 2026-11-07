@@ -39,6 +39,7 @@ class CrashTest:
     # beyond it the API queues requests server-side (up to two minutes) rather than failing.
     sandbox_concurrency: int = 8
     image: str = "python"
+    agent_image: str = "windowsticker/agent-base:1"
     cpus: int = 1
     memory_mib: int = 1024
     budget: RunBudget = field(default_factory=RunBudget)
@@ -208,6 +209,7 @@ async def run_crash_test(
                 client=client,
                 warden=warden,
                 image=test.image,
+                agent_image=test.agent_image,
                 cpus=test.cpus,
                 memory_mib=test.memory_mib,
                 budget=test.budget,

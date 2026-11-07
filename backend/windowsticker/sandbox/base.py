@@ -43,6 +43,11 @@ class NetworkSpec:
     allow_hosts: tuple[str, ...] = ()  # enforced by the warden
     allow_dns: bool = False
     block_metadata: bool = True
+    # Destinations reached directly (not through the warden), e.g. the inference API for an
+    # agent whose brain runs inside the VM. Each is host:port.
+    direct: tuple[str, ...] = ()
+    # host:port of the warden DNS lane on the host; required whenever direct is non-empty.
+    dns_resolver: str | None = None
 
 
 @dataclass(frozen=True)
@@ -56,6 +61,7 @@ class SandboxSpec:
     env: dict[str, str] = field(default_factory=dict)
     labels: dict[str, str] = field(default_factory=dict)
     max_duration_s: float | None = None  # hard VM lifetime, enforced by the runtime
+    intercept_tls: bool = False  # required for placeholder-secret substitution
 
 
 @runtime_checkable
