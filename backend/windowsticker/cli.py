@@ -31,6 +31,8 @@ probe_app = typer.Typer(help="Phase 0 probes that record real platform behaviour
 app.add_typer(suite_app, name="suite")
 app.add_typer(stats_app, name="stats")
 app.add_typer(probe_app, name="probe")
+host_app = typer.Typer(help="Manage sandbox hosts on Vultr (tagged window-sticker).")
+app.add_typer(host_app, name="host")
 console = Console()
 
 
@@ -249,6 +251,130 @@ def probe_sandbox(
         results["warden_events"] = [e.model_dump(mode="json") for e in lane.events]
         results["boot_seconds"] = times
         (out / "sandbox.json").write_text(json.dumps(results, indent=2))
+
+    asyncio.run(main())
+
+
+DEFAULT_KEY = Path.home() / ".ssh" / "window_sticker_vultr"
+
+
+def _ensure_ssh_key(path: Path) -> str:
+    import subprocess
+
+    if not path.exists():
+        path.parent.mkdir(mode=0o700, exist_ok=True)
+        subprocess.run(
+            ["ssh-keygen", "-t", "ed25519", "-N", "", "-C", "window-sticker-host", "-f", str(path)],
+            check=True,
+            capture_output=True,
+        )
+    return path.with_suffix(".pub").read_text().strip()
+
+
+@host_app.command("create")
+def host_create(
+    label: str = typer.Option("wsk-sandbox-1"),
+    plan: str = typer.Option("vx1-g-4c-16g-240s", help="KVM-capable VX1 plan"),
+    region: str = typer.Option("atl", help="Same datacenter as Serverless Inference"),
+    admin_cidr: str = typer.Option(..., help="Your IP as a /32, the only source allowed to SSH"),
+    key: Path = typer.Option(DEFAULT_KEY, help="Local SSH key (created if missing)"),
+) -> None:
+    """Create a sandbox host: dedicated SSH key, SSH-only firewall group, Ubuntu 24.04."""
+    from windowsticker.vultr import VultrAPI
+
+    settings = get_settings()
+    public = _ensure_ssh_key(key)
+
+    async def main() -> None:
+        async with VultrAPI(settings.require_vultr_api_key(), settings.vultr_api_base_url) as api:
+            existing = {k["name"]: k for k in await api.ssh_keys()}
+            if (
+                "window-sticker" in existing
+                and existing["window-sticker"]["ssh_key"].strip() == public
+            ):
+                ssh_id = existing["window-sticker"]["id"]
+            else:
+                ssh_id = (await api.create_ssh_key("window-sticker", public))["id"]
+            groups = {g["description"]: g for g in await api.firewall_groups()}
+            if "window-sticker-host" in groups:
+                fw = groups["window-sticker-host"]["id"]
+            else:
+                fw = await api.create_firewall_group("window-sticker-host")
+                ip, _, size = admin_cidr.partition("/")
+                await api.add_firewall_rule(
+                    fw,
+                    ip_type="v4",
+                    protocol="tcp",
+                    port="22",
+                    subnet=ip,
+                    subnet_size=int(size or 32),
+                    notes="admin ssh",
+                )
+            t0 = time.perf_counter()
+            inst = await api.create_instance(
+                region=region,
+                plan=plan,
+                os_id=2284,
+                label=label,
+                hostname=label,
+                sshkey_id=[ssh_id],
+                firewall_group_id=fw,
+                enable_ipv6=False,
+                backups="disabled",
+                tags=["sandbox-host"],
+            )
+            console.print(f"created {inst['id']} ({plan} in {region}); waiting for it to boot…")
+            inst = await api.wait_active(inst["id"])
+            elapsed = time.perf_counter() - t0
+            console.print(f"[green]active[/] in {elapsed:.0f}s at {inst['main_ip']}")
+            out = Path("artifacts/probes")
+            out.mkdir(parents=True, exist_ok=True)
+            (out / f"host-{label}.json").write_text(
+                json.dumps(
+                    {
+                        "id": inst["id"],
+                        "ip": inst["main_ip"],
+                        "plan": plan,
+                        "region": region,
+                        "create_to_active_s": elapsed,
+                    },
+                    indent=2,
+                )
+            )
+
+    asyncio.run(main())
+
+
+@host_app.command("list")
+def host_list() -> None:
+    from windowsticker.vultr import VultrAPI
+
+    settings = get_settings()
+
+    async def main() -> None:
+        async with VultrAPI(settings.require_vultr_api_key(), settings.vultr_api_base_url) as api:
+            for i in await api.instances():
+                console.print(
+                    f"{i['id']}  {i['label']:18} {i['plan']:20} {i['region']}  "
+                    f"{i['main_ip']:15} {i['status']}/{i['server_status']}"
+                )
+
+    asyncio.run(main())
+
+
+@host_app.command("destroy")
+def host_destroy(instance_id: str) -> None:
+    from windowsticker.vultr import VultrAPI
+
+    settings = get_settings()
+
+    async def main() -> None:
+        async with VultrAPI(settings.require_vultr_api_key(), settings.vultr_api_base_url) as api:
+            inst = await api.instance(instance_id)
+            if "window-sticker" not in (inst.get("tags") or []):
+                raise typer.BadParameter("refusing to delete an instance not tagged window-sticker")
+            await api.delete_instance(instance_id)
+            console.print(f"deleted {instance_id}")
 
     asyncio.run(main())
 
