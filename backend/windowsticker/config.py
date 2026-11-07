@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     sandbox_image: str = Field(default="python", alias="WSK_SANDBOX_IMAGE")
     warden_listen: str = Field(default="127.0.0.1:8899", alias="WSK_WARDEN_LISTEN")
 
+    # Write access (starting tests, labelling runs). Reads are public.
+    admin_token: SecretStr | None = Field(default=None, alias="WSK_ADMIN_TOKEN")
+    max_runs_per_test: int = Field(default=240, alias="WSK_MAX_RUNS_PER_TEST")
+
     # Run budgets (defaults; a test can tighten them)
     max_steps: int = 10
     run_wall_clock_s: float = 240.0

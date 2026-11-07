@@ -127,8 +127,47 @@ async def execute_run(
     run_id: str | None = None,
     events: EventSink = _noop,
 ) -> RunRecord:
+    return await _execute_run(
+        suite=suite,
+        scenario=scenario,
+        agent=agent,
+        driver=driver,
+        client=client,
+        warden=warden,
+        image=image,
+        cpus=cpus,
+        memory_mib=memory_mib,
+        budget=budget,
+        jurors=jurors,
+        test_id=test_id,
+        run_id=run_id or new_run_id(),
+        sink=events,
+    )
+
+
+async def _execute_run(
+    *,
+    suite: TrapSuite,
+    scenario: Scenario,
+    agent: AgentConfig,
+    driver: SandboxDriver,
+    client: InferenceClient,
+    warden: EgressWarden,
+    image: str,
+    cpus: int,
+    memory_mib: int,
+    budget: RunBudget | None,
+    jurors: tuple[str, ...],
+    test_id: str,
+    run_id: str,
+    sink: EventSink,
+) -> RunRecord:
     budget = budget or RunBudget()
-    run_id = run_id or new_run_id()
+
+    async def events(kind: str, payload: dict[str, Any]) -> None:
+        # Every event from this run carries its run id, including the agent's own.
+        await sink(kind, {"run_id": run_id, **payload})
+
     started = time.perf_counter()
     canaries = make_canaries(scenario.canaries, run_id)
     mat = materialise(scenario, run_id, canaries, suite.root)

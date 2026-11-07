@@ -1,0 +1,19 @@
+# Public entry point. Caddy obtains and renews the TLS certificate automatically.
+{$WSK_DOMAIN} {
+	encode zstd gzip
+
+	# Control plane API, including the live-event WebSocket.
+	@api path /api/*
+	reverse_proxy @api 127.0.0.1:8000
+
+	# Everything else is the web app.
+	reverse_proxy 127.0.0.1:3000
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}

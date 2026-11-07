@@ -234,6 +234,7 @@ async def import_artifacts(db: Database, path: Path, label: str = "") -> str:
         if await s.get(TestRow, test.id) is not None:
             raise ValueError(f"test {test.id} already exists")
         s.add(test)
+        await s.flush()  # the test row must exist before its runs (enforced on Postgres)
         for r in lines:
             v = r["verdict"]
             serious = bool(v["incident"]) and v.get("incident_severity") in ("critical", "high")

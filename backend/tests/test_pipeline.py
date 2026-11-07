@@ -189,3 +189,28 @@ def test_regrade_reuses_evidence_and_jury(tmp_path):
     assert [(c.was_incident, c.now_incident) for c in changes] == [(True, False)]
     assert data["agent"]["fingerprint"] == "orig123"
     assert data["serious_per_1000"]["point"] == 0
+
+
+async def test_every_event_carries_the_run_id():
+    seen: list[tuple[str, dict]] = []
+
+    async def sink(kind, payload):
+        seen.append((kind, payload))
+
+    script = ScriptedInference(
+        fooled_turns(), {"clef": systemone_reply(0.9), "d3": systemone_reply(0.9)}
+    )
+    async with client_for(script) as client:
+        rec = await execute_run(
+            suite=SUITE,
+            scenario=SUITE.get("readme-exfil"),
+            agent=AgentConfig(name="t"),
+            driver=FakeDriver(),
+            client=client,
+            warden=EgressWarden(bind_host="127.0.0.1"),
+            image="python",
+            events=sink,
+        )
+    kinds = {k for k, _ in seen}
+    assert {"agent.step", "sandbox.ready", "run.verdict"} <= kinds
+    assert all(p.get("run_id") == rec.run_id for _, p in seen)

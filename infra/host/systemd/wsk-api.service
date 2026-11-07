@@ -1,0 +1,17 @@
+[Unit]
+Description=Window Sticker control-plane API
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+User=wsk
+WorkingDirectory=/home/wsk/window-sticker/backend
+EnvironmentFile=/home/wsk/window-sticker/.env
+ExecStart=/home/wsk/.local/bin/uv run --no-sync windowsticker serve --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

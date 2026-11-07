@@ -18,6 +18,19 @@ Everything on a sticker is measured from real runs. Every number carries its sam
 
 > Built for the lablab.ai **Vultr: Agent Rush** hackathon, Challenge 1 *Blast Radius Zero*.
 
+**Live:** https://107-191-39-70.sslip.io (served from the Vultr VX1 sandbox host itself)
+
+## Results so far (real runs on Vultr)
+
+| Test | Rating | Serious incidents / 1,000 (95% CI) | Safe success | Cost |
+|---|---|---|---|---|
+| Reference agent, no guardrails, 36 runs | ★☆☆☆☆ | 86 (18–231) | 89% | $0.17 |
+| Reference agent, hardened, 36 runs | ★★★☆☆ | 0 (0–97) | 100% | $0.20 |
+| Dependency-confusion trap, 10 v 10 | – | 900 (555–997) v 0 (0–308), **Fisher p = 0.000119** | 10% v 100% | $0.17 |
+
+Agent model: `deepseek-v4.1-flash-1017` on Vultr Serverless Inference. Jury: `clef` + `d3`.
+Validation log, including every false positive found and fixed: [docs/VALIDATION.md](docs/VALIDATION.md).
+
 ---
 
 ## How a crash test works
@@ -66,8 +79,8 @@ anything the microVM or the warden has to stop counts as an *incident*.
 | Serverless Inference: System One | The decision-model jury (`clef`, `d3`) |
 | Serverless Inference: vector store, embeddings | Trap library and mutated variants *(Phase 2)* |
 | Serverless Inference: content safety | Screening of image traps *(Phase 2)* |
-| VPC 2.0, firewall groups | Private control-plane ↔ sandbox-host link, no public SSH *(Phase 7)* |
-| Object Storage, Managed Postgres | Traces, replays, stickers; run ledger *(Phase 2)* |
+| Firewall groups (API) | SSH only from the operator's IP; 80/443 public; created by `windowsticker host create` |
+| Vultr API v2 | Host lifecycle (create, wait active, tagged destroy), SSH keys, firewall rules, billing balance |
 
 ---
 
@@ -76,7 +89,7 @@ anything the microVM or the warden has to stop counts as an *incident*.
 ```bash
 cd backend
 uv sync
-uv run pytest                      # 69 tests, no keys needed
+uv run pytest                      # 94 tests, no keys needed
 uv run windowsticker suite list    # the trap suite
 uv run windowsticker stats thresholds
 ```
@@ -93,6 +106,26 @@ uv run windowsticker run --agent ../agents/baseline.yaml --runs 36
 Outputs go to `artifacts/<test_id>/`: `runs.jsonl` (every step, command, network event
 and verdict), `sticker.json`, `sticker.svg` and `badge.svg`.
 
+## Deployment (one Vultr VX1 host)
+
+```
+Internet ─► Caddy (TLS, :443) ─┬─ /api/*  ─► FastAPI control plane (:8000) ─► Postgres (local)
+                               └─ /*      ─► Next.js web app (:3000)
+            worker (systemd) ── claims queued tests ─► Microsandbox microVMs ─► Egress Warden lanes
+                            └── Vultr Serverless Inference (agent + System One jury)
+```
+
+```bash
+uv run windowsticker host create --admin-cidr <your-ip>/32       # VX1, SSH key, firewall group
+rsync … && ssh root@<host> WSK_DOMAIN=<ip-with-dashes>.sslip.io bash infra/host/provision.sh
+ssh wsk@<host> bash window-sticker/infra/host/release.sh          # build backend + web
+ssh root@<host> systemctl restart wsk-api wsk-worker wsk-web caddy
+```
+
+`provision.sh` installs Postgres (local only), Node 22 and Caddy, generates the database password and
+the write-access token into the host's `.env` (mode 600), and installs the systemd units. Reads are
+public; starting tests and labelling runs need `Authorization: Bearer $WSK_ADMIN_TOKEN`.
+
 ## Repository layout
 
 ```
@@ -106,8 +139,9 @@ web/                    product UI (Phase 3)
 
 ## Status
 
-Engine (Phase 1) is implemented and tested. Platform measurements (Phase 0) come next.
-See [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md).
+Phases 0–3 and the production deploy are done: measured on Vultr, engine, control plane, web
+product, live at the URL above. Next: OpenCode inside the microVM, more models on the leaderboard,
+the published escape matrix and the GitHub Action. See [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md).
 
 ## License
 

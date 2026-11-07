@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
 import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
@@ -91,7 +92,25 @@ def _run_out(r: RunRow, full: bool = False) -> dict[str, Any]:
     return out
 
 
-def create_app(db: Database, *, cors_origins: list[str] | None = None) -> FastAPI:
+def create_app(
+    db: Database,
+    *,
+    admin_token: str | None = None,
+    max_runs_per_test: int = 240,
+    cors_origins: list[str] | None = None,
+) -> FastAPI:
+    """Build the API. Reads are public. Writes need ``Authorization: Bearer <admin_token>``;
+    with no token configured, writes are refused outright (fail closed)."""
+
+    def require_writer(authorization: str | None = Header(default=None)) -> None:
+        if not admin_token:
+            raise HTTPException(503, "writes are disabled: no access token is configured")
+        supplied = (authorization or "").removeprefix("Bearer ").strip()
+        if not hmac.compare_digest(supplied.encode(), admin_token.encode()):
+            raise HTTPException(
+                401, "a valid access token is required to start tests or label runs"
+            )
+
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         await db.create_all()
@@ -103,6 +122,7 @@ def create_app(db: Database, *, cors_origins: list[str] | None = None) -> FastAP
         CORSMiddleware,
         allow_origins=cors_origins or ["*"],
         allow_methods=["GET", "POST"],
+        allow_credentials=False,
         allow_headers=["*"],
     )
 
@@ -115,7 +135,11 @@ def create_app(db: Database, *, cors_origins: list[str] | None = None) -> FastAP
 
     @app.get("/api/health")
     async def health() -> dict[str, Any]:
-        return {"ok": True, "version": __version__}
+        return {"ok": True, "version": __version__, "writes_enabled": bool(admin_token)}
+
+    @app.get("/api/auth/check", dependencies=[Depends(require_writer)])
+    async def auth_check() -> dict[str, bool]:
+        return {"ok": True}
 
     # ------------------------------------------------------------------ suites
     @app.get("/api/suites/{name}")
@@ -144,7 +168,9 @@ def create_app(db: Database, *, cors_origins: list[str] | None = None) -> FastAP
 
     @app.get("/api/measurements")
     async def measurements() -> dict[str, Any]:
-        data: dict[str, Any] = json.loads((Path(__file__).parents[1] / "measurements.json").read_text())
+        data: dict[str, Any] = json.loads(
+            (Path(__file__).parents[1] / "measurements.json").read_text()
+        )
         return data
 
     @app.get("/api/methodology")
@@ -162,8 +188,10 @@ def create_app(db: Database, *, cors_origins: list[str] | None = None) -> FastAP
         }
 
     # ------------------------------------------------------------------ tests
-    @app.post("/api/tests", status_code=201)
+    @app.post("/api/tests", status_code=201, dependencies=[Depends(require_writer)])
     async def post_test(body: CreateTest) -> dict[str, Any]:
+        if body.runs > max_runs_per_test:
+            raise HTTPException(422, f"at most {max_runs_per_test} runs per test")
         try:
             row = await create_test(
                 db,
@@ -295,7 +323,7 @@ def create_app(db: Database, *, cors_origins: list[str] | None = None) -> FastAP
             )
         return [_run_out(r) for r in rows]
 
-    @app.post("/api/runs/{run_id}/label")
+    @app.post("/api/runs/{run_id}/label", dependencies=[Depends(require_writer)])
     async def post_label(run_id: str, body: LabelIn) -> dict[str, Any]:
         try:
             test_id = await label_run(db, run_id, body.incident, body.labeller, body.note)

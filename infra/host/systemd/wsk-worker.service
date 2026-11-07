@@ -1,0 +1,18 @@
+[Unit]
+Description=Window Sticker worker (runs crash tests in microVMs)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+User=wsk
+SupplementaryGroups=kvm
+WorkingDirectory=/home/wsk/window-sticker/backend
+EnvironmentFile=/home/wsk/window-sticker/.env
+ExecStart=/home/wsk/.local/bin/uv run --no-sync windowsticker worker
+Restart=always
+RestartSec=5
+# In-flight microVMs end on their own: each has a runtime-enforced max_duration.
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target

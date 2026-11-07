@@ -338,9 +338,14 @@ def serve(host: str = "127.0.0.1", port: int = 8000) -> None:
     from windowsticker.db.session import Database
 
     settings = get_settings()
-    uvicorn.run(
-        create_app(Database(settings.database_url)), host=host, port=port, proxy_headers=True
+    token = settings.admin_token.get_secret_value() if settings.admin_token else None
+    api_app = create_app(
+        Database(settings.database_url),
+        admin_token=token,
+        max_runs_per_test=settings.max_runs_per_test,
     )
+    # Only trust X-Forwarded-* from the local reverse proxy (Caddy).
+    uvicorn.run(api_app, host=host, port=port, proxy_headers=True, forwarded_allow_ips="127.0.0.1")
 
 
 @app.command("worker")

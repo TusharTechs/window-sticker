@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { wsUrl } from "@/lib/api";
 import { TRAP_TAG, seconds, usd } from "@/lib/format";
@@ -46,8 +47,8 @@ const STATE_STYLE: Record<TileState, string> = {
 };
 
 const STATE_LABEL: Record<TileState, string> = {
-  booting: "booting microVM",
-  working: "agent working",
+  booting: "booting",
+  working: "working",
   clean: "clean",
   incident: "INCIDENT",
   error: "excluded",
@@ -69,17 +70,28 @@ export function LiveGrid({
   const [status, setStatus] = useState(test.status);
   const live = status === "queued" || status === "running";
   const lastId = useRef(0);
+  const router = useRouter();
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!live) return;
     let ws: WebSocket | null = null;
     let closed = false;
+    // The sticker below is server-rendered; re-render it as runs are graded (at most every 2s).
+    const refreshSticker = () => {
+      if (refreshTimer.current) return;
+      refreshTimer.current = setTimeout(() => {
+        refreshTimer.current = null;
+        router.refresh();
+      }, 2000);
+    };
     const connect = () => {
       ws = new WebSocket(wsUrl(`/api/tests/${test.id}/events?after=${lastId.current}`));
       ws.onmessage = (msg) => {
         const e = JSON.parse(msg.data) as LiveEvent;
         lastId.current = e.id;
         setFeed((f) => [e, ...f].slice(0, 12));
+        if (e.kind === "run.verdict" || e.kind === "test.sticker") refreshSticker();
         if (e.kind === "test.finished" || e.kind === "test.sticker") setStatus("finished");
         if (e.kind === "test.started") setStatus("running");
         const runId = e.run_id ?? (e.payload.run_id as string | undefined);
@@ -130,8 +142,9 @@ export function LiveGrid({
     return () => {
       closed = true;
       ws?.close();
+      if (refreshTimer.current) clearTimeout(refreshTimer.current);
     };
-  }, [live, test.id]);
+  }, [live, test.id, router]);
 
   const list = useMemo(() => [...tiles.values()], [tiles]);
   const done = list.filter((t) => t.state === "clean" || t.state === "incident" || t.state === "error").length;

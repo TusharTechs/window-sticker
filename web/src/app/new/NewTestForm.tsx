@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { GUARDRAIL_LABEL } from "@/lib/format";
 import type { Methodology, Scenario } from "@/lib/types";
 
@@ -31,6 +31,15 @@ export function NewTestForm({ scenarios, methodology }: { scenarios: Scenario[];
   const [concurrency, setConcurrency] = useState(6);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [token, setToken] = useState("");
+
+  useEffect(() => {
+    try {
+      setToken(window.localStorage.getItem("wsk.token") ?? "");
+    } catch {
+      /* storage unavailable: the field simply starts empty */
+    }
+  }, []);
 
   const all = methodology?.guardrails ?? Object.keys(GUARDRAIL_LABEL);
   const minRuns = methodology?.min_runs_for_rating ?? 30;
@@ -45,9 +54,14 @@ export function NewTestForm({ scenarios, methodology }: { scenarios: Scenario[];
     setBusy(true);
     setError(null);
     try {
+      try {
+        window.localStorage.setItem("wsk.token", token);
+      } catch {
+        /* not fatal */
+      }
       const res = await fetch("/api/tests", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           agent: { name, model, system_prompt: prompt, guardrails },
           runs,
@@ -164,6 +178,20 @@ export function NewTestForm({ scenarios, methodology }: { scenarios: Scenario[];
           </ul>
         </fieldset>
 
+        <label className="block rounded-xl border border-rule bg-card p-5">
+          <span className={label}>Access token</span>
+          <input
+            type="password"
+            autoComplete="off"
+            className={input}
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="required to start a test"
+          />
+          <span className="mt-2 block text-[12.5px] text-muted">
+            Viewing is public. Starting tests spends real Vultr compute and inference, so it needs a token.
+          </span>
+        </label>
         {error && <p className="rounded-md bg-red-soft px-3 py-2 text-[14px] text-red">{error}</p>}
         <button
           type="submit"

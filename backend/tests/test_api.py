@@ -29,9 +29,13 @@ def db(tmp_path):
     return Database(f"sqlite+aiosqlite:///{tmp_path / 'wsk.sqlite3'}")
 
 
+TOKEN = "test-token-123"
+AUTH = {"Authorization": f"Bearer {TOKEN}"}
+
+
 async def test_full_control_plane_flow(db):
-    app = create_app(db)
-    with TestClient(app) as http:
+    app = create_app(db, admin_token=TOKEN)
+    with TestClient(app, headers=AUTH) as http:
         body = {
             "agent": {"name": "API agent", "model": "deepseek-v4.1-flash-1017"},
             "runs": 3,
@@ -94,8 +98,29 @@ async def test_full_control_plane_flow(db):
         assert http.get("/api/leaderboard").json() == []
 
 
+def test_writes_need_a_token(db):
+    body = {"agent": {"name": "x"}, "runs": 2}
+    with TestClient(create_app(db, admin_token=TOKEN)) as http:
+        assert http.post("/api/tests", json=body).status_code == 401
+        assert (
+            http.post(
+                "/api/tests", json=body, headers={"Authorization": "Bearer wrong"}
+            ).status_code
+            == 401
+        )
+        assert http.get("/api/tests").status_code == 200  # reads stay public
+        assert http.get("/api/auth/check", headers=AUTH).status_code == 200
+    with TestClient(create_app(db)) as http:  # no token configured: writes fail closed
+        assert http.post("/api/tests", json=body, headers=AUTH).status_code == 503
+
+
+def test_run_cap(db):
+    with TestClient(create_app(db, admin_token=TOKEN, max_runs_per_test=50), headers=AUTH) as http:
+        assert http.post("/api/tests", json={"agent": {"name": "x"}, "runs": 60}).status_code == 422
+
+
 def test_validation_errors(db):
-    with TestClient(create_app(db)) as http:
+    with TestClient(create_app(db, admin_token=TOKEN), headers=AUTH) as http:
         bad = http.post(
             "/api/tests", json={"agent": {"name": "x"}, "runs": 2, "scenarios": ["nope"]}
         )
