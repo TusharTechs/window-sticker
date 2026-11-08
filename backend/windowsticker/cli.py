@@ -457,8 +457,9 @@ def _apply_regrade(path: Path) -> None:
         r = json.loads(line)
         ev = RunEvidence.model_validate(r["evidence"])
         answers = [JuryAnswer.model_validate(a) for a in r["verdict"].get("jury", [])]
+        sc = suite.get(r["scenario_id"])
         r["verdict"] = fuse(
-            ev, evaluate_tripwires(suite.get(r["scenario_id"]), ev), answers
+            ev, evaluate_tripwires(sc, ev), answers, category=sc.category
         ).model_dump(mode="json")
         out.append(json.dumps(r))
     src.write_text("\n".join(out) + "\n")
@@ -554,12 +555,14 @@ def _ensure_ssh_key(path: Path) -> str:
 @host_app.command("create")
 def host_create(
     label: str = typer.Option("wsk-sandbox-1"),
-    plan: str = typer.Option("vx1-g-4c-16g-240s", help="KVM-capable VX1 plan"),
-    region: str = typer.Option("atl", help="Same datacenter as Serverless Inference"),
+    plan: str = typer.Option(
+        "vx1-g-2c-8g-120s", help="KVM-capable VX1 plan (the live deployment's)"
+    ),
+    region: str = typer.Option("ewr", help="Region (the live deployment's)"),
     admin_cidr: str = typer.Option(..., help="Your IP as a /32, the only source allowed to SSH"),
     key: Path = typer.Option(DEFAULT_KEY, help="Local SSH key (created if missing)"),
 ) -> None:
-    """Create a sandbox host: dedicated SSH key, SSH-only firewall group, Ubuntu 24.04."""
+    """Create a host: dedicated SSH key, firewall group (SSH from you, web public), Ubuntu 24.04."""
     from windowsticker.vultr import VultrAPI
 
     settings = get_settings()
@@ -580,21 +583,35 @@ def host_create(
                 fw = groups["window-sticker-host"]["id"]
             else:
                 fw = await api.create_firewall_group("window-sticker-host")
-                ip, _, size = admin_cidr.partition("/")
-                await api.add_firewall_rule(
-                    fw,
-                    ip_type="v4",
-                    protocol="tcp",
-                    port="22",
-                    subnet=ip,
-                    subnet_size=int(size or 32),
-                    notes="admin ssh",
-                )
+            # Checked on every run, so a reused group gets any rule it is missing.
+            ip, _, size = admin_cidr.partition("/")
+            wanted = [
+                ("22", ip, int(size or 32), "admin ssh"),
+                ("80", "0.0.0.0", 0, "web (redirects to https)"),
+                ("443", "0.0.0.0", 0, "web"),
+            ]
+            have = {
+                (r["port"], r["subnet"], int(r["subnet_size"]))
+                for r in await api.firewall_rules(fw)
+                if r.get("protocol") == "tcp" and r.get("ip_type") == "v4"
+            }
+            for port, subnet, subnet_size, notes in wanted:
+                if (port, subnet, subnet_size) not in have:
+                    await api.add_firewall_rule(
+                        fw,
+                        ip_type="v4",
+                        protocol="tcp",
+                        port=port,
+                        subnet=subnet,
+                        subnet_size=subnet_size,
+                        notes=notes,
+                    )
+            os_id = await api.os_id("Ubuntu 24.04 LTS x64")
             t0 = time.perf_counter()
             inst = await api.create_instance(
                 region=region,
                 plan=plan,
-                os_id=2284,
+                os_id=os_id,
                 label=label,
                 hostname=label,
                 sshkey_id=[ssh_id],

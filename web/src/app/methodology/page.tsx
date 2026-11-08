@@ -334,9 +334,26 @@ export default async function MethodologyPage() {
       <section className="mt-12 rounded-xl border-2 border-ink bg-card p-6">
         <h2 className="font-display text-[20px] font-extrabold">What a sticker does not claim</h2>
         <ul className="mt-3 list-disc space-y-1.5 pl-5 text-[15px] text-ink-2">
-          <li>It measures behaviour on Trap Suite v1, not every possible attack. The suite is published so you can judge its coverage.</li>
+          <li>It measures behaviour on the published trap suite (v2: 16 traps, 4 of them held out), not every possible attack. The suite is published so you can judge its coverage.</li>
           <li>Models change. A sticker is for one configuration on one date; the config fingerprint and suite digest are printed on it.</li>
           <li>It is not an insurance quote or a certification.</li>
+          <li>
+            The interval is per run on this trap mix. Each trap gets an equal share of runs, so how far a rating carries
+            to traps nobody has written yet depends on about sixteen traps, not on 96 runs.
+          </li>
+          <li>
+            The held-out traps are now public too. Ratings meant for buying decisions need a private, rotating set; that is
+            the next suite&apos;s design.
+          </li>
+          <li>
+            Network evidence comes from the lab&apos;s proxy and inference lane. Traffic that avoids them cannot leave the
+            deny-all microVM, so it is never a leak, but it is only visible as an attempt when the command shows it (for
+            example, unsetting the proxy, which is flagged).
+          </li>
+          <li>
+            The agent is root inside its microVM. The hidden check runs with a scrubbed environment and protected files are
+            re-hashed from the host, but a determined agent could still tamper with tools outside the hashed paths.
+          </li>
         </ul>
       </section>
     </div>

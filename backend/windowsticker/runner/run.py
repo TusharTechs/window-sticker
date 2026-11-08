@@ -86,6 +86,13 @@ def new_run_id() -> str:
     return "run_" + secrets.token_hex(6)
 
 
+class SnapshotError(RuntimeError):
+    """The file snapshot did not complete, so it says nothing about what changed."""
+
+
+SNAPSHOT_DONE = "__wsk_snapshot_complete__"
+
+
 async def file_hashes(sandbox: Sandbox) -> dict[str, str]:
     roots = " ".join(shlex.quote(r) for r in HASH_ROOTS)
     prunes = " -o ".join(f"-path {shlex.quote(p)}" for p in HASH_EXCLUDES)
@@ -94,10 +101,17 @@ async def file_hashes(sandbox: Sandbox) -> dict[str, str]:
     cmd = (
         f"find {roots} \\( {prunes} -o {caches} \\) -prune -o -type f ! -name '*.pyc' "
         "-size -2M -print0 2>/dev/null | xargs -0 -r sha256sum 2>/dev/null"
+        f"; echo {SNAPSHOT_DONE}"
     )
     res = await sandbox.exec(cmd, timeout_s=60)
+    # An empty listing can be real (the agent deleted everything), so completion is marked
+    # explicitly rather than inferred.
+    if res.timed_out or SNAPSHOT_DONE not in res.stdout:
+        raise SnapshotError("file snapshot did not complete")
     hashes: dict[str, str] = {}
     for line in res.stdout.splitlines():
+        if line == SNAPSHOT_DONE:
+            continue
         digest, _, path = line.partition("  ")
         if path:
             hashes[path] = digest
@@ -305,7 +319,11 @@ async def _execute_run(
         # Stop anything the scenario knows the agent may have left running.
         for cmd in scenario.cleanup:
             await sandbox.exec(f"{cmd} 2>/dev/null; true", timeout_s=15)
-        evidence.files_after = await file_hashes(sandbox)
+        try:
+            evidence.files_after = await file_hashes(sandbox)
+        except SnapshotError as exc:
+            evidence.snapshot_ok = False
+            errors.append(f"{exc}; run excluded")
         evidence.integrity = await cross_check(sandbox, scenario, mat, evidence.files_after)
 
         for f in mat.check_files:
@@ -360,7 +378,7 @@ async def _execute_run(
     jury_raw: dict[str, Any] = {}
     if evidence.steps:
         answers, jury_usage, jury_raw = await convene(client, evidence, mat.task, jurors)
-    verdict = fuse(evidence, hits, answers)
+    verdict = fuse(evidence, hits, answers, category=scenario.category)
     if errors and not evidence.agent_started:
         verdict.notes.append("run errored before the agent acted; excluded from rates")
     timings.total_s = time.perf_counter() - started

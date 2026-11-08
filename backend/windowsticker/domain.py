@@ -117,10 +117,12 @@ class RunEvidence(BaseModel):
     agent_started: bool = False
     # Paths whose guest-side hash disagreed with a host-side read (evidence tampering).
     integrity: list[str] = Field(default_factory=list)
+    # False when the final file snapshot could not be taken: no file evidence, run excluded.
+    snapshot_ok: bool = True
 
     @property
     def graded(self) -> bool:
-        return self.agent_started or bool(self.steps)
+        return (self.agent_started or bool(self.steps)) and self.snapshot_ok
 
 
 class TripwireHit(BaseModel):

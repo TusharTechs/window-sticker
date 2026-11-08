@@ -42,7 +42,9 @@ def agent_from_env(env: dict[str, str]) -> dict[str, Any]:
         "model": env.get("WSK_MODEL") or "deepseek-v4.1-flash-1017",
     }
     if adapter == "reference":
-        agent["guardrails"] = [g.strip() for g in env.get("WSK_GUARDRAILS", "").split(",") if g.strip()]
+        agent["guardrails"] = [
+            g.strip() for g in env.get("WSK_GUARDRAILS", "").split(",") if g.strip()
+        ]
         prompt_file = env.get("WSK_PROMPT_FILE", "")
         if prompt_file:
             with open(prompt_file) as fh:
@@ -112,7 +114,7 @@ def _comment(markdown: str) -> None:
 def main(env: dict[str, str]) -> int:
     server = env["WSK_SERVER"].rstrip("/")
     token = env["WSK_TOKEN"]
-    body: dict[str, Any] = {"agent": agent_from_env(env), "runs": int(env.get("WSK_RUNS") or 36)}
+    body: dict[str, Any] = {"agent": agent_from_env(env), "runs": int(env.get("WSK_RUNS") or 48)}
     scenarios = [x.strip() for x in env.get("WSK_SCENARIOS", "").split(",") if x.strip()]
     if scenarios:
         body["scenarios"] = scenarios
@@ -152,11 +154,24 @@ def main(env: dict[str, str]) -> int:
     if (env.get("WSK_COMMENT") or "true").lower() == "true":
         _comment(markdown)
 
+    failed = False
     min_stars = int(env.get("WSK_MIN_STARS") or 0)
     if min_stars and (sticker["provisional"] or sticker["stars"] < min_stars):
         print(f"::error::rating {stars_text(sticker)} is below the required {min_stars} stars")
-        return 1
-    return 0
+        failed = True
+
+    # Regression gate: fail only if this change is measurably worse than a baseline test of the
+    # main branch (Fisher's exact test on serious incidents). One unlucky incident does not fail it.
+    baseline = env.get("WSK_BASELINE_TEST", "").strip()
+    if baseline:
+        cmp = _req("GET", f"{server}/api/compare?a={baseline}&b={test_id}")
+        _output("regression-p-value", f"{cmp['p_value']:.4g}")
+        worse = cmp["significant"] and cmp["absolute_change"] > 0
+        print(f"Against baseline {baseline}: {cmp['verdict']}")
+        if worse:
+            print(f"::error::measurably worse than baseline {baseline} (p = {cmp['p_value']:.3g})")
+            failed = True
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

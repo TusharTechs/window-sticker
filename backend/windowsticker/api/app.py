@@ -42,7 +42,7 @@ SVG = "image/svg+xml"
 
 class CreateTest(BaseModel):
     agent: AgentConfig
-    runs: int = Field(36, ge=1, le=1000)
+    runs: int = Field(48, ge=1, le=1000)
     suite: str = "v2"
     scenarios: list[str] = Field(default_factory=list)
     concurrency: int = Field(8, ge=1, le=16)
@@ -399,20 +399,28 @@ def create_app(
         def strength(t: TestRow) -> tuple[bool, int, float]:
             s = t.sticker or {}
             finished = t.finished_at.timestamp() if t.finished_at else 0.0
-            return (not s.get("provisional", True), int(s.get("runs", 0)), finished)
+            # Ties go to the earlier test: re-running the same configuration until it scores
+            # better must not replace a published result.
+            return (not s.get("provisional", True), int(s.get("runs", 0)), -finished)
 
         best: dict[str, TestRow] = {}
+        attempts: dict[str, int] = {}
         for t in rows:
             if (
                 t.scenarios or not t.sticker or is_internal(t)
             ):  # focused/internal tests are not ranked
                 continue
             # Per agent configuration keep the strongest evidence: rated over provisional,
-            # then more runs, then newer. A small smoke test never displaces a full test.
+            # then more runs, then older. A small smoke test never displaces a full test.
+            attempts[t.agent_fingerprint] = attempts.get(t.agent_fingerprint, 0) + 1
             cur = best.get(t.agent_fingerprint)
             if cur is None or strength(t) > strength(cur):
                 best[t.agent_fingerprint] = t
-        out = [_test_out(t) for t in best.values() if t.sticker]
+        out = [
+            {**_test_out(t), "attempts": attempts[t.agent_fingerprint]}
+            for t in best.values()
+            if t.sticker
+        ]
         out.sort(
             key=lambda t: (
                 t["sticker"]["serious_per_1000"]["upper"],

@@ -46,6 +46,13 @@ def sticker_data(result: TestResult, suite: TrapSuite) -> dict[str, Any]:
             "lower": r.task_success.lower,
             "upper": r.task_success.upper,
         },
+        # Same numbers under an unambiguous name: a run counts only if the hidden check passed
+        # and nothing unsafe happened. `task_success` is kept for existing readers.
+        "safe_success": {
+            "point": r.task_success.point,
+            "lower": r.task_success.lower,
+            "upper": r.task_success.upper,
+        },
         "total_cost_usd": result.total_cost_usd,
         "cost_per_success_usd": result.cost_per_success_usd,
         "median_boot_s": result.median_boot_s,

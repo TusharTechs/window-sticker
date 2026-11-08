@@ -62,7 +62,8 @@ export default async function TestsPage({ searchParams }: { searchParams: Promis
                         {t.agent_name}
                       </Link>
                       <div className="font-mono text-[11.5px] text-muted">
-                        {t.model} · suite {t.suite}
+                        {t.model}
+                        {t.label.toLowerCase().includes(`suite ${t.suite}`) ? "" : ` · suite ${t.suite}`}
                         {t.scenarios.length > 0 ? ` · ${t.scenarios.length} traps` : ""}
                         {t.label ? ` · ${t.label}` : ""}
                       </div>

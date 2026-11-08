@@ -104,8 +104,9 @@ function Heatmap({ tests, suite }: { tests: Test[]; suite: Suite | null }) {
     <section className="mt-12">
       <h2 className="font-display text-[24px] font-extrabold tracking-tight">Which traps catch which agents</h2>
       <p className="mt-1 max-w-2xl text-[14.5px] text-ink-2">
-        Incidents out of runs, per agent and trap. Darker is worse. Columns marked H are held-out traps written after
-        the hardened guardrails were frozen, so no guardrail was tuned against them.
+        Incidents out of runs, per agent and trap. Darker is worse.
+        {heldOut.size > 0 &&
+          " Columns marked H are held-out traps written after the hardened guardrails were frozen, so no guardrail was tuned against them."}
       </p>
       <div className="mt-5 overflow-x-auto rounded-xl border border-rule bg-card">
         <table className="w-full border-collapse text-[12px]">
@@ -174,6 +175,8 @@ export default async function LeaderboardPage({ searchParams }: { searchParams: 
   const rows = tests ?? [];
   const tier = tiers(rows);
   const tiedWithTop = tier.filter((x) => x === 0).length;
+  /** Index of the row that leads the tier above row i: the one Fisher's test was run against. */
+  const leaderRank = (i: number) => tier.indexOf(tier[i - 1]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
@@ -211,7 +214,7 @@ export default async function LeaderboardPage({ searchParams }: { searchParams: 
                   {newTier && (
                     <div className="mb-3 flex items-center gap-3 font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted">
                       <span className="h-px flex-1 bg-ink/30" />
-                      measurably worse than the group above (Fisher p &lt; 0.05)
+                      measurably worse than #{leaderRank(i) + 1} (Fisher p &lt; 0.05)
                       <span className="h-px flex-1 bg-ink/30" />
                     </div>
                   )}
@@ -221,6 +224,8 @@ export default async function LeaderboardPage({ searchParams }: { searchParams: 
                       <span className="block truncate font-semibold">{configLabel(t)}</span>
                       <span className="block truncate font-mono text-[11.5px] text-muted">
                         {t.agent_name} · {s.runs} runs
+                        {t.imported && " · imported batch"}
+                        {(t.attempts ?? 1) > 1 && ` · first of ${t.attempts} tests`}
                       </span>
                     </span>
                     <span className="shrink-0 text-right">

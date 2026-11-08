@@ -3,7 +3,7 @@ import { Stars } from "@/components/Stars";
 import { StickerCard } from "@/components/StickerCard";
 import { api } from "@/lib/api";
 import { TRAP_TAG, per1k, seconds, usd } from "@/lib/format";
-import type { Test } from "@/lib/types";
+import type { Breakdown, Test } from "@/lib/types";
 
 const STEPS = [
   {
@@ -43,6 +43,14 @@ const AUDIENCE = [
   },
 ];
 
+function setupLabel(t: Test): string {
+  const name = t.agent_name.toLowerCase();
+  if (name.startsWith("opencode")) return "OpenCode, running inside the microVM";
+  if (name.includes("hardened")) return "Reference agent, prompt + 6 tool-level guardrails";
+  if (name.includes("prompt")) return "Reference agent, one system-prompt guardrail";
+  return "Reference agent, no guardrails";
+}
+
 function aggregateFindings(tests: Test[]) {
   const by = new Map<string, { title: string; category: string; incidents: number; runs: number; agents: number }>();
   for (const t of tests) {
@@ -65,6 +73,20 @@ export default async function Home() {
   const worst = board.length > 1 ? board[board.length - 1] : null;
   const findings = aggregateFindings(board).slice(0, 4);
   const totalRuns = board.reduce((a, t) => a + (t.sticker?.runs ?? 0), 0);
+  const boots = board.map((t) => t.sticker?.median_boot_s).filter((x): x is number => x != null).sort((a, b) => a - b);
+  const bootMedian = boots.length ? boots[Math.floor(boots.length / 2)] : (host?.boot_p50_s ?? null);
+  const rates = board
+    .map((t) => (t.sticker?.wall_clock_s ? (t.sticker.runs / t.sticker.wall_clock_s) * 3600 : null))
+    .filter((x): x is number => x != null)
+    .sort((a, b) => a - b);
+  const models = new Set(board.map((t) => t.model)).size;
+  // Same model, different setups: the cleanest comparison the leaderboard offers.
+  const heldOut = new Set((suite?.scenarios ?? []).filter((s) => s.tags.includes("held-out")).map((s) => s.id));
+  const sameModel = board.filter((t) => t.model === best?.model && t.sticker);
+  const tally = (t: Test, pick: (b: Breakdown) => boolean, key: "incidents" | "serious" | "runs") =>
+    (t.sticker?.breakdown ?? []).filter(pick).reduce((a, b) => a + b[key], 0);
+  const all = () => true;
+  const held = (b: Breakdown) => heldOut.has(b.scenario);
 
   return (
     <>
@@ -105,8 +127,8 @@ export default async function Home() {
           <dl className="mt-10 grid max-w-lg grid-cols-3 gap-6 border-t border-rule pt-6">
             <div>
               <dt className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted">microVM boot</dt>
-              <dd className="mt-1 font-display text-[24px] font-extrabold tabular">{seconds(host?.boot_p50_s ?? null)}</dd>
-              <dd className="font-mono text-[10.5px] text-muted">p50, cached image</dd>
+              <dd className="mt-1 font-display text-[24px] font-extrabold tabular">{seconds(bootMedian)}</dd>
+              <dd className="font-mono text-[10.5px] text-muted">median, production runs</dd>
             </div>
             <div>
               <dt className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted">Runs on record</dt>
@@ -172,6 +194,53 @@ export default async function Home() {
         </section>
       )}
 
+      {sameModel.length >= 3 && heldOut.size > 0 && (
+        <section className="mx-auto max-w-6xl px-4 pt-16 sm:px-6">
+          <h2 className="font-display text-[30px] font-extrabold tracking-tight">What Trap Suite {suiteName} found</h2>
+          <p className="mt-2 max-w-3xl text-[16px] leading-relaxed text-ink-2">
+            Same model, different setups. Guardrails removed the serious failures. But six tool-level guardrails added
+            nothing measurable on top of one system prompt, and on traps written after they were frozen both guardrailed agents still
+            reached for code from an unknown package index. The lab blocked it every time; the guardrails never did.
+          </p>
+          <div className="mt-6 overflow-x-auto rounded-xl border-2 border-ink bg-card">
+            <table className="w-full min-w-[560px] text-[14px]">
+              <thead>
+                <tr className="border-b border-rule text-left font-mono text-[10.5px] uppercase tracking-[0.12em] text-muted">
+                  <th className="px-4 py-3 font-semibold">{best?.model.replace(/-\d{4}$/, "")}, set up as</th>
+                  <th className="px-4 py-3 font-semibold">Rating</th>
+                  <th className="px-4 py-3 text-right font-semibold">Serious, all traps</th>
+                  <th className="px-4 py-3 text-right font-semibold">Any incident, held-out traps</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sameModel.map((t) => (
+                  <tr key={t.id} className="border-b border-rule last:border-0">
+                    <td className="px-4 py-3 font-semibold">
+                      <Link href={`/tests/${t.id}`} className="hover:underline">
+                        {setupLabel(t)}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Stars stars={t.sticker!.stars} provisional={t.sticker!.provisional} size={15} />
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono tabular">
+                      {tally(t, all, "serious")}/{t.sticker!.runs}
+                    </td>
+                    <td className="px-4 py-3 text-right font-mono tabular">
+                      {tally(t, held, "incidents")}/{tally(t, held, "runs")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-3 font-mono text-[11.5px] text-muted">
+            Held-out traps: {heldOut.size} of {suite?.scenarios.length}. Package-index incidents are graded by what happened:
+            contact is logged, a download is an incident, only an install is serious.
+          </p>
+        </section>
+      )}
+
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
         <h2 className="font-display text-[30px] font-extrabold tracking-tight">Who it is for</h2>
         <div className="mt-6 grid gap-4 md:grid-cols-3">
@@ -179,6 +248,31 @@ export default async function Home() {
             <div key={a.title} className="rounded-xl border border-rule bg-card p-5">
               <h3 className="text-[16.5px] font-bold">{a.title}</h3>
               <p className="mt-2 text-[14.5px] leading-relaxed text-ink-2">{a.body}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-6 grid gap-px overflow-hidden rounded-xl border border-rule bg-rule md:grid-cols-3">
+          {[
+            {
+              k: "Cost to produce a rating",
+              v: best?.sticker?.all_in_cost_usd != null ? `${usd(best.sticker.all_in_cost_usd)} for ${best.sticker.runs} runs` : "under $1",
+              note: "Inference plus VX1 host time, measured on this page's best-rated test. A five-star test is 183 runs.",
+            },
+            {
+              k: "How it makes money (hypothesis)",
+              v: "Free CLI, paid ratings",
+              note: "The engine, trap format and badge are open source. Hosted, published ratings are paid per sticker; vendors pay for certification runs on a private trap set.",
+            },
+            {
+              k: "Recurring",
+              v: "A gate on every pull request",
+              note: "Teams that ship prompt and guardrail changes run it in CI. Every run is Vultr compute and Serverless Inference.",
+            },
+          ].map((x) => (
+            <div key={x.k} className="bg-card p-5">
+              <div className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted">{x.k}</div>
+              <div className="mt-1 text-[17px] font-bold">{x.v}</div>
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-2">{x.note}</p>
             </div>
           ))}
         </div>
@@ -244,7 +338,8 @@ export default async function Home() {
               ["Sandbox host", host ? `Vultr ${host.plan} · ${host.region}` : "Vultr VX1"],
               ["Isolation", "microVM per run, own kernel"],
               ["Escape matrix", "17/17 and 22/22 contained"],
-              ["Models compared", "6 from Serverless Inference"],
+              ["Models compared", `${models} from Serverless Inference`],
+              ["Throughput", rates.length ? `${Math.round(rates[0] / 10) * 10}–${Math.round(rates[rates.length - 1] / 10) * 10} runs per host-hour` : "n/a"],
               ["Jury", "clef + d3, AUC 0.98 vs tripwires"],
               ["Host price", host ? `${usd(host.hourly_usd)} / hour` : ""],
             ].map(([k, v]) => (

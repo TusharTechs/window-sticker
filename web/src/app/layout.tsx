@@ -8,10 +8,20 @@ const inter = Inter_Tight({ subsets: ["latin"], variable: "--font-inter-tight", 
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains", display: "swap" });
 const archivo = Archivo({ subsets: ["latin"], weight: ["800"], variable: "--font-archivo", display: "swap" });
 
+const DESCRIPTION =
+  "Run an AI agent dozens of times in throwaway microVMs on Vultr against a published trap suite. Get a measured safety rating, incident rate and cost per task.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.WSK_PUBLIC_URL ?? "http://localhost:3000"),
   title: "Window Sticker: crash-test ratings for AI agents",
-  description:
-    "Run an AI agent dozens of times in throwaway microVMs on Vultr against a published trap suite. Get a measured safety rating, incident rate and cost per task.",
+  description: DESCRIPTION,
+  openGraph: {
+    title: "Window Sticker: every AI agent should ship with a crash-test rating",
+    description: DESCRIPTION,
+    type: "website",
+    images: [{ url: "/og.png", width: 1200, height: 630, alt: "A Window Sticker crash-test rating" }],
+  },
+  twitter: { card: "summary_large_image", images: ["/og.png"] },
 };
 
 const NAV = [

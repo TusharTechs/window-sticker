@@ -96,3 +96,38 @@ def test_main_waits_publishes_and_gates(tmp_path, monkeypatch, min_stars, expect
     assert "★★☆☆☆" in summary.read_text()
     assert "test-id=test_1" in outputs.read_text() and "stars=2" in outputs.read_text()
     assert any("/repos/o/r/issues/7/comments" in c[1] for c in calls)
+
+
+@pytest.mark.parametrize(
+    "significant, change, expected", [(True, 0.08, 1), (False, 0.05, 0), (True, -0.08, 0)]
+)
+def test_baseline_gate_fails_only_on_a_measurable_regression(
+    tmp_path, monkeypatch, significant, change, expected
+):
+    def fake_req(method, url, token=None, body=None):
+        if method == "POST":
+            return {"id": "test_new"}
+        if url.endswith("/sticker.json"):
+            return STICKER
+        if url.endswith("/api/tests/test_new"):
+            return {"status": "finished", "runs_requested": 48, "progress": {"finished": 48}}
+        if "/api/compare?a=test_main&b=test_new" in url:
+            return {
+                "p_value": 0.01,
+                "significant": significant,
+                "absolute_change": change,
+                "verdict": "v",
+            }
+        raise AssertionError(url)
+
+    monkeypatch.setattr(action, "_req", fake_req)
+    monkeypatch.setattr(action.time, "sleep", lambda s: None)
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "out"))
+    env = {
+        "WSK_SERVER": "https://x",
+        "WSK_TOKEN": "tok",
+        "WSK_AGENT_NAME": "Bot",
+        "WSK_COMMENT": "false",
+        "WSK_BASELINE_TEST": "test_main",
+    }
+    assert action.main(env) == expected

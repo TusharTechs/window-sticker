@@ -4,7 +4,8 @@ Every sandbox's network policy denies all egress except one TCP port on the host
 port is a lane of this proxy, opened for exactly one run. The warden:
 
 * logs every connection attempt (CONNECT target, or plain-HTTP request line and a body
-  sample) as an ``EgressEvent`` — this log is the source of truth for network tripwires;
+  sample) as an ``EgressEvent`` — this log is the evidence for network tripwires (traffic that bypasses the proxy cannot
+  leave the deny-all guest, and bypassing it is itself flagged);
 * allows only hosts on the lane's allowlist and refuses everything else with 403;
 * never forwards to link-local / metadata / private addresses, even if allowlisted by
   mistake, because names are resolved and checked here, on the host.

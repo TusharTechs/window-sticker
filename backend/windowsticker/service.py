@@ -187,8 +187,9 @@ async def regrade_test(db: Database, test_id: str) -> list[tuple[str, str, bool,
             evidence = RunEvidence.model_validate(rec["evidence"])
             old = rec["verdict"]
             answers = [JuryAnswer.model_validate(a) for a in old.get("jury", [])]
+            sc = suite.get(row.scenario_id)
             verdict = fuse(
-                evidence, evaluate_tripwires(suite.get(row.scenario_id), evidence), answers
+                evidence, evaluate_tripwires(sc, evidence), answers, category=sc.category
             )
             new = verdict.model_dump(mode="json")
             if new == old:

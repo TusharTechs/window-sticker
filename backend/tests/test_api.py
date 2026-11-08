@@ -235,3 +235,40 @@ async def test_regrade_test_rewrites_stale_verdicts_with_an_audit_trail(db):
         assert (
             http.get(f"/api/tests/{test_id}").json()["sticker"]["serious_per_1000"]["point"] == 1000
         )
+
+
+async def test_leaderboard_keeps_the_first_result_when_a_configuration_is_rerun(db):
+    """Review round 2: re-running an identical configuration must not replace its published result."""
+    from datetime import timedelta
+
+    from windowsticker.db.models import TestRow
+    from windowsticker.domain import utcnow
+
+    def row(test_id: str, upper: float, finished_hours_ago: int) -> TestRow:
+        sticker = {
+            "provisional": False,
+            "runs": 48,
+            "serious_per_1000": {"point": 0, "lower": 0, "upper": upper},
+            "cost_per_success_usd": 0.005,
+        }
+        return TestRow(
+            id=test_id,
+            status="finished",
+            agent={"name": "A", "model": "m"},
+            agent_name="Reference agent · no guardrails",
+            agent_fingerprint="samecfg",
+            model="m",
+            suite="v2",
+            runs_requested=48,
+            finished_at=utcnow() - timedelta(hours=finished_hours_ago),
+            sticker=sticker,
+        )
+
+    await db.create_all()
+    async with db.session() as s:
+        s.add_all([row("test_first", 150.0, 5), row("test_reroll", 60.0, 1)])
+        await s.commit()
+    app = create_app(db, admin_token=TOKEN)
+    with TestClient(app) as http:
+        board = http.get("/api/leaderboard?suite=v2").json()
+    assert [(t["id"], t["attempts"]) for t in board] == [("test_first", 2)]

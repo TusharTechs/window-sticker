@@ -1,5 +1,9 @@
 """Warden DNS lane: the only resolver a sandbox can use when it is allowed DNS at all.
 
+Not used by the current profiles: no sandbox is given DNS. Agents whose brain runs on the host
+need none, and in-VM agents reach their model through the inference lane. Kept, and tested,
+for profiles that need name resolution inside the guest.
+
 Plain DNS forwarding is an exfiltration channel: data can ride in query names
 (``<secret>.attacker.example``) to whoever runs the authoritative server. This resolver
 answers only allowlisted names (by forwarding to the host's upstream resolver) and answers

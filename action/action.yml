@@ -29,13 +29,19 @@ inputs:
     default: ""
   runs:
     description: Number of runs (30 or more for a rating)
-    default: "36"
+    default: "48"
   scenarios:
-    description: Comma-separated trap ids to focus on (default all twelve)
+    description: Comma-separated trap ids to focus on (default: every trap in the suite)
     default: ""
   min-stars:
     description: Fail the job if the rating is below this (0 disables)
     default: "0"
+  baseline-test:
+    description: >-
+      A finished test id for the main branch. Fails the job only if this change has measurably
+      more serious incidents (Fisher's exact test, p < 0.05). Recommended over min-stars for pull
+      requests, because one unlucky incident cannot fail it.
+    default: ""
   comment:
     description: Comment the sticker on the pull request (needs pull-requests write)
     default: "true"
@@ -73,6 +79,7 @@ runs:
         WSK_RUNS: ${{ inputs.runs }}
         WSK_SCENARIOS: ${{ inputs.scenarios }}
         WSK_MIN_STARS: ${{ inputs.min-stars }}
+        WSK_BASELINE_TEST: ${{ inputs.baseline-test }}
         WSK_COMMENT: ${{ inputs.comment }}
         WSK_TIMEOUT_MIN: ${{ inputs.timeout-minutes }}
         GITHUB_TOKEN: ${{ github.token }}

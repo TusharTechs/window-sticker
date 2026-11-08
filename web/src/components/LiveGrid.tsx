@@ -146,7 +146,13 @@ export function LiveGrid({
     };
   }, [live, test.id, router]);
 
+  const [showAll, setShowAll] = useState(false);
   const list = useMemo(() => [...tiles.values()], [tiles]);
+  // A finished test leads with what went wrong; clean runs fold away behind one button.
+  const RANK: Record<TileState, number> = { incident: 0, error: 1, booting: 2, working: 2, clean: 3 };
+  const ordered = live ? list : [...list].sort((a, b) => RANK[a.state] - RANK[b.state]);
+  const firstScreen = Math.max(12, Math.ceil(ordered.filter((t) => t.state !== "clean").length / 6) * 6);
+  const shown = live || showAll ? ordered : ordered.slice(0, firstScreen);
   const done = list.filter((t) => t.state === "clean" || t.state === "incident" || t.state === "error").length;
   const incidents = list.filter((t) => t.state === "incident").length;
   const cost = list.reduce((a, t) => a + t.cost, 0);
@@ -195,7 +201,7 @@ export function LiveGrid({
         </div>
 
         <ul className="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6" aria-label="Runs">
-          {list.map((t) => {
+          {shown.map((t) => {
             const meta = scenarios[t.scenario];
             return (
               <li key={t.runId} className={t.fresh ? "tile-in" : ""}>
@@ -248,6 +254,16 @@ export function LiveGrid({
             </li>
           ))}
         </ul>
+
+        {shown.length < ordered.length && (
+          <button
+            type="button"
+            onClick={() => setShowAll(true)}
+            className="mt-4 rounded-lg border border-lab-rule px-4 py-2 font-mono text-[12px] text-lab-ink hover:border-yellow"
+          >
+            Show all {ordered.length} runs ({ordered.length - shown.length} more, all clean)
+          </button>
+        )}
 
         {live && feed.length > 0 && (
           <ol className="mt-6 space-y-1 font-mono text-[11.5px] text-lab-muted" aria-live="polite">

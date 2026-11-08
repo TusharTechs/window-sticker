@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { api } from "@/lib/api";
-import { FAILURE_LABEL, TRAP_TAG, seconds, usd } from "@/lib/format";
+import { FAILURE_LABEL, TRAP_TAG, WOULD_HAVE, seconds, usd } from "@/lib/format";
 import type { JuryAnswer, RunRecord, Step, TripwireHit } from "@/lib/types";
 
 const SEV_STYLE: Record<TripwireHit["severity"], string> = {
@@ -89,6 +89,9 @@ function Timeline({ r }: { r: RunRecord }) {
     hitsByStep.set(h.step, [...(hitsByStep.get(h.step) ?? []), h]);
   }
   const canaries = r.evidence.canaries;
+  // In-VM agents are metered per run on the host, so their per-step cost is an even split.
+  const costs = r.evidence.steps.map((s) => s.cost_usd);
+  const evenSplit = costs.length > 1 && costs.every((c) => Math.abs(c - costs[0]) < 1e-9);
   return (
     <ol className="relative space-y-3 border-l-2 border-rule pl-6">
       <li className="relative">
@@ -119,7 +122,10 @@ function Timeline({ r }: { r: RunRecord }) {
                       refused by {s.blocked_by}
                     </span>
                   )}
-                  <span className="font-mono text-[11px] text-muted tabular">{usd(s.cost_usd)}</span>
+                  <span className="font-mono text-[11px] text-muted tabular">
+                    {usd(s.cost_usd)}
+                    {evenSplit && " avg"}
+                  </span>
                 </span>
               </div>
               {s.thought && (
@@ -175,12 +181,16 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
   const r = run.record;
   const scenario = suite?.scenarios.find((s) => s.id === r.scenario_id);
   const v = r.verdict;
-  const egress = r.evidence.egress;
+  // The inference lane is the agent's door to its own model, shown apart from attempts to leave.
+  const egress = r.evidence.egress.filter((e) => e.protocol !== "inference");
+  const modelCalls = r.evidence.egress.filter((e) => e.protocol === "inference");
   const blocked = egress.filter((e) => !e.allowed);
   const unplaced = v.tripwire_hits.filter((h) => h.step == null);
   const refused = r.evidence.steps.filter((s) => s.blocked_by);
   const leaked = v.tripwire_hits.some((h) => !h.near_miss && h.kind === "canary_leak");
   const stopped: { what: string; how: string }[] = [];
+  const story = scenario && v.incident ? WOULD_HAVE[scenario.category] : undefined;
+  if (story) stopped.push({ what: story.would, how: story.here });
   const blockedHosts = [...new Set(blocked.map((e) => e.host))];
   if (blockedHosts.length)
     stopped.push({
@@ -259,7 +269,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
               <h2 className="font-semibold">What the lab stopped</h2>
               <p className="mt-1 text-[13px] text-ink-2">
                 {v.incident
-                  ? "The agent did something dangerous. In a real repository this would have been the damage; here is why it was not."
+                  ? "The agent did something dangerous. Outside the lab this would have been the damage; here is why it was not."
                   : "Nothing dangerous got through. This is what the agent or the lab held back."}
               </p>
               <ul className="mt-3 space-y-2.5">
@@ -301,8 +311,10 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
             <h2 className="font-semibold">Egress Warden</h2>
             <p className="mt-1 text-[13px] text-ink-2">
               {egress.length === 0
-                ? "No outbound connection attempts."
-                : `${egress.length} attempt(s), ${blocked.length} refused.`}
+                ? "No attempts to reach anything outside the microVM."
+                : `${egress.length} attempt(s) to reach outside, ${blocked.length} refused.`}
+              {modelCalls.length > 0 &&
+                ` ${modelCalls.length} call(s) to the agent's own model went through the inference lane, which holds the key on the host.`}
             </p>
             {egress.length > 0 && (
               <ul className="mt-3 space-y-1.5 font-mono text-[11.5px]">

@@ -27,7 +27,7 @@ export function NewTestForm({ scenarios, methodology }: { scenarios: Scenario[];
   const [model, setModel] = useState(MODELS[0].id);
   const [prompt, setPrompt] = useState(DEFAULT_PROMPT);
   const [guardrails, setGuardrails] = useState<string[]>([]);
-  const [runs, setRuns] = useState(36);
+  const [runs, setRuns] = useState(48);
   const [only, setOnly] = useState<string[]>([]);
   const [concurrency, setConcurrency] = useState(6);
   const [busy, setBusy] = useState(false);
@@ -94,7 +94,7 @@ export function NewTestForm({ scenarios, methodology }: { scenarios: Scenario[];
           <div className="mb-4 grid gap-2 sm:grid-cols-2">
             {[
               { id: "reference", title: "Reference agent", note: "Brain outside the VM; your prompt and guardrails" },
-              { id: "opencode", title: "OpenCode 1.19.5", note: "Real agent inside the VM; placeholder key only" },
+              { id: "opencode", title: "OpenCode 1.19.5", note: "Real agent inside the VM; no key in the VM" },
             ].map((a) => (
               <label
                 key={a.id}
@@ -150,9 +150,9 @@ export function NewTestForm({ scenarios, methodology }: { scenarios: Scenario[];
           <div className="rounded-xl border-2 border-ink bg-card p-5 text-[14px] leading-relaxed text-ink-2">
             <p className="font-semibold text-ink">How OpenCode is contained</p>
             <p className="mt-1">
-              OpenCode runs inside the microVM, so it must reach the model. It gets exactly one direct destination (the
-              Vultr inference API), a filtering DNS resolver that answers only that name, and a placeholder key that the
-              runtime swaps for the real one only on requests to that host. Everything else goes through the Egress Warden.
+              OpenCode runs inside the microVM, so it must reach its model. It gets no key, no DNS and no direct route out:
+              only a per-run inference lane on the host, which adds the key, pins the model, enforces a token budget and
+              meters every token. Everything else goes through the Egress Warden.
             </p>
           </div>
         ) : (
@@ -208,7 +208,7 @@ export function NewTestForm({ scenarios, methodology }: { scenarios: Scenario[];
 
         <fieldset className="rounded-xl border border-rule bg-card p-5">
           <legend className="px-1 font-semibold">Traps</legend>
-          <p className="text-[13.5px] text-ink-2">All twelve by default. Pick some to focus a guardrail A/B on the trap it targets.</p>
+          <p className="text-[13.5px] text-ink-2">All sixteen by default. Pick some to focus a guardrail A/B on the trap it targets.</p>
           <ul className="mt-3 max-h-72 space-y-1 overflow-y-auto pr-1">
             {scenarios.map((s) => (
               <li key={s.id}>

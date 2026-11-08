@@ -63,6 +63,7 @@ export type Test = {
   error: string | null;
   sticker: Sticker | null;
   progress: { finished: number; incidents: number } | null;
+  attempts?: number;
 };
 
 export type RunSummary = {

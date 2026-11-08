@@ -46,9 +46,13 @@ class VultrAPI:
         await self.aclose()
 
     async def _call(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        # A 429 was never processed, so it is always safe to retry. A 5xx on a POST may have
+        # created the resource anyway (a second host, a second key), so only idempotent
+        # methods retry on server errors.
+        idempotent = method.upper() in {"GET", "PUT", "DELETE", "HEAD"}
         for attempt in range(4):
             resp = await self._http.request(method, path, **kwargs)
-            if resp.status_code == 429 or resp.status_code >= 500:
+            if resp.status_code == 429 or (resp.status_code >= 500 and idempotent):
                 await asyncio.sleep(1.5 * (attempt + 1))
                 continue
             if resp.status_code >= 400:
@@ -133,6 +137,16 @@ class VultrAPI:
 
     async def firewall_groups(self) -> list[dict[str, Any]]:
         return await self._paged("/firewalls", "firewall_groups")
+
+    async def firewall_rules(self, group_id: str) -> list[dict[str, Any]]:
+        return await self._paged(f"/firewalls/{group_id}/rules", "firewall_rules")
+
+    async def os_id(self, name: str) -> int:
+        """The id of an operating system image by its exact name, e.g. "Ubuntu 24.04 LTS x64"."""
+        for image in await self._paged("/os", "os"):
+            if image.get("name") == name:
+                return int(image["id"])
+        raise VultrAPIError(404, f"no OS image named {name!r}")
 
     # ------------------------------------------------------------------ instances
     async def create_instance(self, **body: Any) -> dict[str, Any]:

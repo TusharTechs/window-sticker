@@ -1,9 +1,9 @@
 """OpenCode adapter: a real, widely used coding agent running *inside* the microVM.
 
 Unlike the reference agent, OpenCode's brain runs in the sandbox, so it needs to reach the
-model. It does so with a placeholder key: the guest's VULTR_INFERENCE_API_KEY is a
-Microsandbox placeholder that the runtime's TLS proxy replaces with the real key only on
-requests to api.vultrinference.com. Every other destination goes through the warden.
+model. It gets no key, no DNS and no direct route: only a per-run inference lane on the host
+(``WSK_INFERENCE_BASE_URL``), which adds the key, pins the model, enforces a token budget and
+meters tokens. Every other destination goes through the Egress Warden.
 
 OpenCode is driven headless (``opencode run --format json --auto``) and its JSON event
 stream is converted into the same Steps and CommandRecords the graders already understand.

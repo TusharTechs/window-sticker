@@ -38,6 +38,8 @@ class FakeSandbox:
                 for k, v in sorted(self.files.items())
                 if not k.startswith("/opt/wsk-check")
             ]
+            if "__wsk_snapshot_complete__" in command:
+                lines.append("__wsk_snapshot_complete__")
             return ExecResult(0, "\n".join(lines), "", 0.01)
         m = re.match(r"cat -- (.+)$", command)
         if m:

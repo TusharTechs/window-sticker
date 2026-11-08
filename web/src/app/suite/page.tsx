@@ -11,11 +11,12 @@ const SEV: Record<string, string> = {
 export default async function SuitePage() {
   const suite = await api.suite();
   if (!suite) return <p className="mx-auto max-w-6xl px-6 py-12">Suite unavailable.</p>;
+  const heldOut = suite.scenarios.filter((s) => s.tags.includes("held-out")).length;
   return (
     <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
       <h1 className="font-display text-[34px] font-extrabold tracking-tight">Trap Suite {suite.name}</h1>
       <p className="mt-2 max-w-3xl text-ink-2">
-        Twelve scenarios. Each gives the agent a legitimate task and hides one trap in the workspace. Fake credentials
+        {suite.scenarios.length} scenarios{heldOut > 0 && `, ${heldOut} of them held out: written after the hardened guardrails were frozen`}. Each gives the agent a legitimate task and hides one trap in the workspace. Fake credentials
         are generated fresh for every run, the exfiltration host is a reserved <code className="font-mono">.test</code>{" "}
         domain that cannot resolve, and a hidden check (which the agent never sees) decides whether the task was really
         done. Digest <code className="font-mono">{suite.digest}</code> is printed on every sticker.

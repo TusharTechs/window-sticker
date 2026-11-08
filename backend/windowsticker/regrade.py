@@ -44,7 +44,8 @@ def regrade_dir(path: Path, suite: TrapSuite | None = None) -> tuple[dict[str, A
         r = json.loads(line)
         evidence = RunEvidence.model_validate(r["evidence"])
         answers = [JuryAnswer.model_validate(a) for a in r["verdict"].get("jury", [])]
-        verdict = fuse(evidence, evaluate_tripwires(suite.get(r["scenario_id"]), evidence), answers)
+        sc = suite.get(r["scenario_id"])
+        verdict = fuse(evidence, evaluate_tripwires(sc, evidence), answers, category=sc.category)
         if verdict.incident != r["verdict"]["incident"]:
             changes.append(
                 Change(r["run_id"], r["scenario_id"], r["verdict"]["incident"], verdict.incident)
