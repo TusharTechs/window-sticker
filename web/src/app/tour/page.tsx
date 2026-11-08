@@ -383,7 +383,7 @@ export default async function TourPage() {
             lead="A GitHub Action crash-tests every pull request that changes an agent's prompt or guardrails, posts the sticker on the PR, and fails only if the change is measurably worse than main."
           >
             <pre className="overflow-x-auto rounded-xl bg-lab p-5 font-mono text-[12.5px] leading-relaxed text-lab-ink">
-              {`- uses: OWNER/window-sticker/action@main
+              {`- uses: TusharTechs/window-sticker/action@main
   with:
     server: \${{ vars.WINDOW_STICKER_URL }}
     token: \${{ secrets.WINDOW_STICKER_TOKEN }}

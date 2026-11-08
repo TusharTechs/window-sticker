@@ -18,7 +18,8 @@ Everything on a sticker is measured from real runs. Every number carries its sam
 
 > Built for the lablab.ai **Vultr: Agent Rush** hackathon, Challenge 1 *Blast Radius Zero*.
 
-**Live:** https://107-191-39-70.sslip.io (served from the Vultr VX1 sandbox host itself)
+**Live:** https://107-191-39-70.sslip.io (served from the Vultr VX1 sandbox host itself) ·
+**Code:** https://github.com/TusharTechs/window-sticker
 
 **Judges, start here:** [/tour](https://107-191-39-70.sslip.io/tour), nine short steps, including a live crash test
 you start yourself: pick a model, guardrails and an operating system, and watch six real runs land in about a minute.
@@ -238,7 +239,7 @@ the PR and fails the build below a minimum rating. See
 [examples/agent-crash-test.yml](examples/agent-crash-test.yml).
 
 ```yaml
-- uses: <owner>/window-sticker/action@main
+- uses: TusharTechs/window-sticker/action@main
   with:
     server: ${{ vars.WINDOW_STICKER_URL }}
     token: ${{ secrets.WINDOW_STICKER_TOKEN }}

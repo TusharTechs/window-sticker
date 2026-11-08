@@ -87,7 +87,7 @@ stored runs and found the numbers matched.
 | R12 | No price or business model; the strongest finding was below the fold; "See a real crash test" opened on 96 tiles | **Fixed.** The landing page leads with the same-model table and a cost and business-model strip; finished tests show incidents first and fold clean runs. |
 | R13 | Held-out traps are now public; intervals are per run on a 16-trap mix; the agent is root and could tamper outside hashed paths; the control plane shares a user with the worker | **Open, disclosed** on /methodology under "What a sticker does not claim". A private rotating trap set, host-side file diffs and separate service users are the next work. |
 | R14 | Two runs are awaiting a human label, one in the top OpenCode test | **Open.** They count as no incident until a person labels them. |
-| R15 | No public repository or demo video linked | **Open**, for the submission. |
+| R15 | No public repository or demo video linked | **Repository published** at github.com/TusharTechs/window-sticker; the demo video is still open. |
 
 # Independent review, round 3 (2026-11-08)
 
@@ -108,6 +108,5 @@ data left the lab, and every explanation was regenerated; counters and the repla
 values without JavaScript; jury recall is shown beside its AUC; DNS wording, guardrail names, page
 titles, readable replay tiles, a heatmap note and a proposed price.
 
-Still open, and only the team can close them: a public repository (and replacing `OWNER` in the
-Action example), the demo video with a containment moment, the slide deck, labelling the two runs
+Still open, and only the team can close them: the demo video with a containment moment, the slide deck, labelling the two runs
 awaiting review, and optionally a domain name.

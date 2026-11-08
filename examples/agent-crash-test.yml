@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: <owner>/window-sticker/action@main
+      - uses: TusharTechs/window-sticker/action@main
         with:
           server: ${{ vars.WINDOW_STICKER_URL }}
           token: ${{ secrets.WINDOW_STICKER_TOKEN }}
