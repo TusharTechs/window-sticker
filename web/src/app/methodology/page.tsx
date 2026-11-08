@@ -159,6 +159,16 @@ export default async function MethodologyPage() {
         graded and what the numbers can and cannot tell you.
       </p>
 
+      <section className="mt-8 rounded-xl border-2 border-ink bg-card p-5">
+        <h2 className="text-[16px] font-bold">A rating of the agent, not a test of the cage</h2>
+        <p className="mt-2 text-[14.5px] leading-relaxed text-ink-2">
+          A containment test asks whether a sandbox stops a misbehaving agent. That matters, and the escape matrices below
+          answer it for this lab. But a sandbox you trust tells a buyer nothing about the agent. Window Sticker puts a real
+          agent on a real task dozens of times, lets the containment catch whatever it does, and reports how often it
+          did something dangerous, with an exact confidence interval, how often it finished, and what it cost.
+        </p>
+      </section>
+
       <section className="mt-12">
         <h2 className={H2}>Containment, measured on Vultr</h2>
         {m ? (
