@@ -33,7 +33,7 @@ async def create_test(
     agent: AgentConfig,
     runs: int,
     *,
-    suite: str = "v1",
+    suite: str = "v2",
     scenarios: list[str] | None = None,
     concurrency: int = 8,
     label: str = "",

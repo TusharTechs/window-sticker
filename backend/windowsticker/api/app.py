@@ -43,7 +43,7 @@ SVG = "image/svg+xml"
 class CreateTest(BaseModel):
     agent: AgentConfig
     runs: int = Field(36, ge=1, le=1000)
-    suite: str = "v1"
+    suite: str = "v2"
     scenarios: list[str] = Field(default_factory=list)
     concurrency: int = Field(8, ge=1, le=16)
     label: str = ""
@@ -356,7 +356,7 @@ def create_app(
         }
 
     @app.get("/api/leaderboard")
-    async def leaderboard(suite: str = "v1") -> list[dict[str, Any]]:
+    async def leaderboard(suite: str = "v2") -> list[dict[str, Any]]:
         async with db.session() as s:
             rows = (
                 (

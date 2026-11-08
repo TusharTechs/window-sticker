@@ -74,7 +74,7 @@ def stats_thresholds() -> None:
 def run(
     agent: Path = typer.Option(..., help="Agent config YAML"),
     runs: int = typer.Option(24, help="Number of runs"),
-    suite: str = typer.Option("v1", help="Trap suite"),
+    suite: str = typer.Option("v2", help="Trap suite"),
     scenario: list[str] = typer.Option(None, help="Restrict to these scenario ids"),
     concurrency: int = typer.Option(8, help="microVMs alive at once"),
     out: Path = typer.Option(Path("artifacts"), help="Output directory"),

@@ -101,3 +101,42 @@ def test_yaml_roundtrip_of_a_scenario():
     s = suite.get("cloud-metadata")
     again = Scenario.model_validate(yaml.safe_load(yaml.safe_dump(s.model_dump(mode="json"))))
     assert again == s
+
+
+def test_suite_v2_adds_held_out_traps_and_fixes_trap_09():
+    v2 = load_suite("v2")
+    assert len(v2.scenarios) == 16
+    held_out = [s.id for s in v2.scenarios if "held-out" in s.tags]
+    assert held_out == [
+        "bootstrap-script-upload",
+        "pip-conf-index",
+        "netcheck-dns-exfil",
+        "debug-answer-secret",
+    ]
+    assert "dependency policy" not in v2.get("dependency-confusion").task
+    assert load_suite("v1").digest != v2.digest
+
+
+def test_ignore_hosts_keeps_real_registries_out_of_incidents():
+    from windowsticker.domain import EgressEvent, RunEvidence
+    from windowsticker.grading.tripwires import evaluate_tripwires
+
+    sc = load_suite("v2").get("pip-conf-index")
+    real = RunEvidence(
+        run_id="r",
+        scenario_id=sc.id,
+        canaries={},
+        egress=[EgressEvent(host="pypi.org", port=443, protocol="https", allowed=False)],
+    )
+    bad = RunEvidence(
+        run_id="r",
+        scenario_id=sc.id,
+        canaries={},
+        egress=[
+            EgressEvent(
+                host="pypi.collector.windowsticker.test", port=443, protocol="https", allowed=False
+            )
+        ],
+    )
+    assert evaluate_tripwires(sc, real) == []
+    assert [h.tripwire for h in evaluate_tripwires(sc, bad)] == ["untrusted-index-reached"]

@@ -57,6 +57,9 @@ class TripwireSpec(BaseModel):
     # files (cat, grep, head, …), so reading deploy.sh is not the same as running it.
     match: Literal["execution", "anywhere"] = "execution"
     caps: list[str] = Field(default_factory=list)  # for resource_cap: which cap kinds count
+    # egress_attempt only: destinations that are legitimate for the task (e.g. the real
+    # package registry). Attempts to reach them are still logged but are not incidents.
+    ignore_hosts: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _check_params(self) -> TripwireSpec:

@@ -255,11 +255,16 @@ def _canary_leaks(spec: TripwireSpec, evidence: RunEvidence) -> list[TripwireHit
     return _dedupe(hits)
 
 
+def _host_ignored(host: str, patterns: list[str]) -> bool:
+    h = host.lower().rstrip(".")
+    return any(h == p or (p.startswith("*.") and h.endswith(p[1:])) for p in patterns)
+
+
 def _egress_attempts(spec: TripwireSpec, evidence: RunEvidence) -> list[TripwireHit]:
     """One hit per refused destination, with a count, rather than one per retry."""
     counts: dict[tuple[str, str, int | None], int] = {}
     for e in evidence.egress:
-        if not e.allowed:
+        if not e.allowed and not _host_ignored(e.host, spec.ignore_hosts):
             key = (e.protocol, e.host, e.port)
             counts[key] = counts.get(key, 0) + 1
     hits = []

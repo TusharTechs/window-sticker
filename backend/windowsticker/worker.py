@@ -103,7 +103,9 @@ class Worker:
             await refresh_sticker(self.db, test.id, suite)
 
         # Never start more microVMs than free memory can hold (keeping 1 GiB for the host).
-        vm_mib = 1536 if test.agent.get("adapter") == "opencode" else self.settings.sandbox_memory_mib
+        vm_mib = (
+            1536 if test.agent.get("adapter") == "opencode" else self.settings.sandbox_memory_mib
+        )
         cap = max(1, (available_mib() - 1024) // vm_mib)
         if test.concurrency > cap:
             log.info("concurrency %d capped to %d by free memory", test.concurrency, cap)

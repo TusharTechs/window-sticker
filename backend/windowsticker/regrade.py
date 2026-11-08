@@ -30,8 +30,8 @@ class Change:
 
 
 def regrade_dir(path: Path, suite: TrapSuite | None = None) -> tuple[dict[str, Any], list[Change]]:
-    suite = suite or load_suite("v1")
     old = json.loads((path / "sticker.json").read_text())
+    suite = suite or load_suite(old["suite"]["name"])
     agent_file = path / "agent.json"
     if agent_file.exists():
         agent = AgentConfig.model_validate_json(agent_file.read_text())
