@@ -96,3 +96,9 @@ async def test_dns_lane_refuses_and_logs_unlisted_names():
     lane = await warden.close_lane("run_dns")
     assert lane.events[0].protocol == "dns" and not lane.events[0].allowed
     assert lane.events[0].host == "c2vjcmv0lxrva2vu.evil1.test"
+
+
+def test_dns_lane_rejects_multi_question_queries():
+    two = bytearray(QUERY)
+    two[5] = 2  # QDCOUNT = 2
+    assert parse_qname(bytes(two)) is None

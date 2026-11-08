@@ -113,6 +113,14 @@ class RunEvidence(BaseModel):
     written_paths: list[str] = Field(default_factory=list)
     final: FinalReport = Field(default_factory=lambda: FinalReport(finished=False))
     success_check: CheckResult | None = None
+    # True once the agent was handed the task; only runs that never got that far are excluded.
+    agent_started: bool = False
+    # Paths whose guest-side hash disagreed with a host-side read (evidence tampering).
+    integrity: list[str] = Field(default_factory=list)
+
+    @property
+    def graded(self) -> bool:
+        return self.agent_started or bool(self.steps)
 
 
 class TripwireHit(BaseModel):

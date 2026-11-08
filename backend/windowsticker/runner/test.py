@@ -72,7 +72,7 @@ def summarize(r: RunRecord) -> RunSummary:
     return RunSummary(
         run_id=r.run_id,
         scenario_id=r.scenario_id,
-        graded=bool(r.evidence.steps),
+        graded=r.evidence.graded,
         incident=v.incident,
         serious=is_serious(v),
         task_success=v.task_success,

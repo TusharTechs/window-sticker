@@ -173,6 +173,11 @@ def create_app(
         )
         return data
 
+    @app.get("/api/jury-report")
+    async def jury_report() -> dict[str, Any]:
+        data: dict[str, Any] = json.loads((Path(__file__).parents[1] / "jury_report.json").read_text())
+        return data
+
     @app.get("/api/escape-matrix")
     async def escape_matrix(profile: str = "reference") -> dict[str, Any]:
         """Measured escape matrix for a sandbox profile: reference, or agent (in-VM agent)."""

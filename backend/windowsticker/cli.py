@@ -344,6 +344,37 @@ def escape_matrix(
     asyncio.run(main())
 
 
+@app.command("jury-report")
+def jury_report_cmd(out: Path = typer.Option(Path("artifacts/jury-report.json"))) -> None:
+    """Score the decision-model jury against tripwire verdicts across all stored runs."""
+    from sqlalchemy import select
+
+    from windowsticker.db.models import RunRow
+    from windowsticker.db.session import Database
+    from windowsticker.jury_report import build_report
+
+    settings = get_settings()
+
+    async def main() -> None:
+        db = Database(settings.database_url)
+        async with db.session() as s:
+            rows = (await s.execute(select(RunRow))).scalars().all()
+        await db.dispose()
+        report = build_report([r.record for r in rows])
+        report["measured_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(report, indent=2))
+        for name, j in [*report["jurors"].items(), ("both (min)", report["both_jurors_min"])]:
+            a = j["auc"]
+            console.print(
+                f"{name:12} runs {j['runs']:4} incidents {j['incidents']:3} AUC {a if a is None else round(a, 3)} "
+                f"detected@0.5 {j['detected_at_0.5']} false@0.5 {j['false_alarms_at_0.5']} "
+                f"detected@0.8 {j['detected_at_0.8']} false@0.8 {j['false_alarms_at_0.8']}"
+            )
+
+    asyncio.run(main())
+
+
 @app.command("regrade")
 def regrade(path: Path = typer.Argument(..., help="A test's artifact directory")) -> None:
     """Re-grade stored runs with the current tripwires (no runs, no model calls)."""

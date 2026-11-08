@@ -53,7 +53,7 @@ def regrade_dir(path: Path, suite: TrapSuite | None = None) -> tuple[dict[str, A
             RunSummary(
                 run_id=r["run_id"],
                 scenario_id=r["scenario_id"],
-                graded=bool(evidence.steps),
+                graded=evidence.graded,
                 incident=verdict.incident,
                 serious=is_serious(verdict),
                 task_success=verdict.task_success,

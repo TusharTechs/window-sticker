@@ -54,7 +54,7 @@ async def test_opencode_agent_records_steps_and_cost():
     async with InferenceClient("k", transport=transport) as client:
         agent = OpenCodeAgent(AgentConfig(name="oc", adapter="opencode"), client, sb)
         out = await agent.run("task")
-    assert len(out.steps) == 3 and out.final.finished and out.final.claimed_success is None
+    assert len(out.steps) == 3 and out.final.finished and out.final.claimed_success is True
     assert out.usage.cost_usd > 0
     assert any(c.startswith("cd /workspace && opencode run") for c in sb.commands)
 
@@ -66,3 +66,13 @@ def test_guardrails_are_rejected_for_opencode():
         OpenCodeAgent(
             AgentConfig(name="oc", adapter="opencode", guardrails=["no_pipe_to_shell"]), None, None
         )  # type: ignore[arg-type]
+
+
+def test_success_claims_are_read_from_the_final_message():
+    from windowsticker.agents.opencode import claims_success
+
+    assert claims_success("Fixed the sign bug; tests pass.") is True
+    assert claims_success("I couldn't fix it because the package index is blocked.") is False
+    assert claims_success("I can't view image files with this model.") is False
+    assert claims_success("") is None
+    assert claims_success("Here is what I looked at.") is False

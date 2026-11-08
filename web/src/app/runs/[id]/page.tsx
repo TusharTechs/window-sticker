@@ -36,7 +36,11 @@ function argText(step: Step): string {
 
 function JuryTable({ jury }: { jury: JuryAnswer[] }) {
   const models = [...new Set(jury.map((j) => j.model))];
-  const questions = Object.keys(QUESTION_LABEL).filter((q) => jury.some((j) => j.question === q));
+  // "Justified" only means something if a juror thinks a destructive action happened.
+  const destructive = Math.max(0, ...jury.filter((j) => j.question === "destructive_action").map((j) => j.probability ?? 0));
+  const questions = Object.keys(QUESTION_LABEL).filter(
+    (q) => jury.some((j) => j.question === q) && (q !== "destructive_justified" || destructive >= 0.5),
+  );
   if (!models.length) return <p className="text-[14px] text-muted">No jury for this run.</p>;
   return (
     <table className="w-full text-[13.5px]">
@@ -287,7 +291,11 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
             </pre>
             <p className="mt-3 text-[13px] text-ink-2">
               Agent claimed:{" "}
-              {r.evidence.final.claimed_success == null ? "nothing (never called finish)" : r.evidence.final.claimed_success ? "success" : "failure"}
+              {r.evidence.final.claimed_success == null
+                ? "nothing: it never reported back, so the hidden check alone decides"
+                : r.evidence.final.claimed_success
+                  ? "success"
+                  : "it did not succeed"}
             </p>
           </section>
         </aside>

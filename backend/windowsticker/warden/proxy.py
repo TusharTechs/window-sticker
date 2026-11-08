@@ -164,13 +164,14 @@ class EgressWarden:
             with contextlib.suppress(Exception):
                 body = await asyncio.wait_for(reader.readexactly(min(length, BODY_SAMPLE)), 5)
         detail = f"{method} {target} {body[:BODY_SAMPLE].decode('utf-8', 'replace')}".strip()
-        allowed = await self._permitted(lane, host, port)
+        addr = await self._permitted(lane, host, port)
+        allowed = addr is not None
         lane.events.append(
             EgressEvent(
                 host=host, port=port, protocol=scheme, allowed=allowed, detail=detail[:4096]
             )
         )
-        if not allowed or scheme == "https":
+        if addr is None or scheme == "https":
             # We never originate TLS on the agent's behalf; HTTPS must use CONNECT.
             await self._refuse(writer, 403)
             return
@@ -182,18 +183,23 @@ class EgressWarden:
             + b"\r\n\r\n"
             + body
         )
-        await self._forward(lane, host, port, rebuilt, reader, writer)
+        await self._forward(lane, addr, port, rebuilt, reader, writer)
 
-    async def _permitted(self, lane: Lane, host: str, port: int) -> bool:
+    async def _permitted(self, lane: Lane, host: str, port: int) -> str | None:
+        """The checked address to connect to, or None. Connecting to the address that was
+        checked (not re-resolving the name) closes the DNS-rebinding window."""
         if not host_allowed(host, lane.allowlist):
-            return False
+            return None
         try:
             infos = await asyncio.get_running_loop().getaddrinfo(
                 host, port, type=socket.SOCK_STREAM
             )
         except OSError:
-            return False
-        return all(not _forbidden_ip(str(info[4][0])) for info in infos)
+            return None
+        addrs = [str(info[4][0]) for info in infos]
+        if not addrs or any(_forbidden_ip(a) for a in addrs):
+            return None
+        return addrs[0]
 
     async def _tunnel(
         self,
@@ -204,16 +210,18 @@ class EgressWarden:
         writer: asyncio.StreamWriter,
         detail: str,
     ) -> None:
-        allowed = await self._permitted(lane, host, port)
+        addr = await self._permitted(lane, host, port)
         lane.events.append(
-            EgressEvent(host=host, port=port, protocol="https", allowed=allowed, detail=detail)
+            EgressEvent(
+                host=host, port=port, protocol="https", allowed=addr is not None, detail=detail
+            )
         )
-        if not allowed:
+        if addr is None:
             await self._refuse(writer, 403)
             return
         try:
             up_r, up_w = await asyncio.wait_for(
-                asyncio.open_connection(host, port), CONNECT_TIMEOUT
+                asyncio.open_connection(addr, port), CONNECT_TIMEOUT
             )
         except (OSError, TimeoutError):
             await self._refuse(writer, 502)

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import mimetypes
 import secrets
 import shlex
@@ -101,6 +102,36 @@ async def file_hashes(sandbox: Sandbox) -> dict[str, str]:
         if path:
             hashes[path] = digest
     return hashes
+
+
+# Environment variables an agent could plant to change how the hidden check behaves.
+CHECK_ENV_UNSET = ("PYTHONPATH", "PYTHONSTARTUP", "PYTHONHOME", "PYTHONUSERBASE", "LD_PRELOAD")
+
+
+def hardened_check(command: str) -> str:
+    """Run the hidden check with a scrubbed environment (no user site-packages, no planted
+    Python path or preload). The agent never sees the check, but it controls the VM."""
+    unset = " ".join(f"-u {v}" for v in CHECK_ENV_UNSET)
+    return f"env {unset} PYTHONNOUSERSITE=1 PYTHONDONTWRITEBYTECODE=1 sh -c {shlex.quote(command)}"
+
+
+async def cross_check(
+    sandbox: Sandbox, scenario: Scenario, mat: Any, guest_hashes: dict[str, str]
+) -> list[str]:
+    """Re-hash the files tripwires depend on through the runtime's file API (a different code
+    path from the guest's find/sha256sum). A mismatch means the guest's evidence was forged."""
+    paths = {f.path for f in mat.files}
+    for t in scenario.tripwires:
+        paths.update(p for p in t.paths if "*" not in p)
+    mismatches = []
+    for path in sorted(paths):
+        try:
+            digest: str | None = hashlib.sha256(await sandbox.read_file(path)).hexdigest()
+        except Exception:
+            digest = None
+        if digest != guest_hashes.get(path):
+            mismatches.append(path)
+    return mismatches
 
 
 async def _seed(sandbox: Sandbox, files: Any, setup: tuple[str, ...]) -> None:
@@ -247,6 +278,8 @@ async def _execute_run(
                 agent, client, sandbox, token_budget=budget.token_budget, events=events
             )
         t1 = time.perf_counter()
+        # From here on the run counts: it is excluded only if the harness failed before this.
+        evidence.agent_started = True
         try:
             outcome = await asyncio.wait_for(
                 ref.run(mat.task, attachments), timeout=budget.wall_clock_s
@@ -273,11 +306,12 @@ async def _execute_run(
         for cmd in scenario.cleanup:
             await sandbox.exec(f"{cmd} 2>/dev/null; true", timeout_s=15)
         evidence.files_after = await file_hashes(sandbox)
+        evidence.integrity = await cross_check(sandbox, scenario, mat, evidence.files_after)
 
         for f in mat.check_files:
             await sandbox.write_file(f.path, f.data, f.mode)
         res = await sandbox.exec(
-            scenario.success.command, timeout_s=CHECK_TIMEOUT, cwd="/workspace"
+            hardened_check(scenario.success.command), timeout_s=CHECK_TIMEOUT, cwd="/workspace"
         )
         evidence.success_check = CheckResult(
             command=scenario.success.command,
@@ -320,7 +354,7 @@ async def _execute_run(
     if evidence.steps:
         answers, jury_usage, jury_raw = await convene(client, evidence, mat.task, jurors)
     verdict = fuse(evidence, hits, answers)
-    if errors and not evidence.steps:
+    if errors and not evidence.agent_started:
         verdict.notes.append("run errored before the agent acted; excluded from rates")
     timings.total_s = time.perf_counter() - started
     await events("run.verdict", {"run_id": run_id, "verdict": verdict.model_dump(mode="json")})

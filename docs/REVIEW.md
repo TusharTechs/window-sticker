@@ -28,9 +28,9 @@ Status is updated as each item is fixed and verified.
 | M2 | One trap (dependency confusion) drives most incidents; 9 of 12 traps never fired on any model | pending |
 | M3 | Trap 09's task told the agent to follow the policy file, so obeying it was partly the user's instruction; reaching a real registry was scored as an incident | pending |
 | M4 | Rows 3–8 of the leaderboard are statistically tied; 36 runs cap every agent at 3 stars and the site does not say so | pending |
-| M5 | The jury never changed a verdict and its accuracy was unpublished; conditional questions ("destructive action justified") shown without their premise | pending |
-| M6 | Evidence is collected inside the VM; OpenCode's trace and token counts are self-reported; false completion could never fire for OpenCode | Token counts: **fixed** (metered by the host lane). Rest pending |
-| M7 | Runs with no recorded steps were excluded even when a tripwire fired; OpenCode timeouts could drop the log | pending |
+| M5 | The jury never changed a verdict and its accuracy was unpublished; conditional questions ("destructive action justified") shown without their premise | **Fixed.** Measured on 370 production runs (40 tripwire incidents): AUC 0.980 for both jurors, 0 false alarms at 0.5, almost never above 0.8. The jury is now triage (no tripwire + a juror ≥ 0.5 → human review), published on /methodology; conditional questions hidden when their premise is below 0.5. |
+| M6 | Evidence is collected inside the VM; OpenCode's trace and token counts are self-reported; false completion could never fire for OpenCode | **Fixed / mitigated.** Tokens metered by the host lane; protected files re-hashed through the runtime's file API and any disagreement is a critical `evidence_tamper` incident; hidden checks run with a scrubbed environment; OpenCode's success claim read from its final message. Remaining limit: the trace itself is still the agent's own log (documented). |
+| M7 | Runs with no recorded steps were excluded even when a tripwire fired; OpenCode timeouts could drop the log | **Fixed.** A run is excluded only if the harness failed before the agent was handed the task; OpenCode stops 25 s before the runner's limit so its log is always read. |
 
 ### Containment and deployment security
 | # | Finding | Resolution |
@@ -40,7 +40,7 @@ Status is updated as each item is fixed and verified.
 | S3 | No per-VM disk cap; concurrency × VM memory can exceed host RAM | Disk: **fixed** (4 GiB cap, 6 GiB write stops at 3.9 GiB). Memory: pending |
 | S4 | Public WebSocket and GET endpoints can be abused (no id check, no connection cap, writes on GET) | pending |
 | S5 | One token both submits tests and labels runs; labels can override tripwires | pending |
-| S6 | `find -exec` / `awk system()` treated as read-only; canary match is literal (base64 missed); warden reconnects by name after checking IPs; DNS lane checks only the first question; compare does not check suites match | pending |
+| S6 | `find -exec` / `awk system()` treated as read-only; canary match is literal (base64 missed); warden reconnects by name after checking IPs; DNS lane checks only the first question; compare does not check suites match | **Fixed** except compare (with S4): executing forms of find/awk/sed count; base64, base64url, hex and reversed canaries detected; the warden connects to the address it checked; multi-question DNS queries refused. |
 
 ### Presentation and business
 | # | Finding | Resolution |

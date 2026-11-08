@@ -1,0 +1,33 @@
+{
+  "ground_truth": "tripwire verdict (medium severity or above, near misses excluded)",
+  "jurors": {
+    "clef": {
+      "runs": 370,
+      "incidents": 40,
+      "auc": 0.9799242424242425,
+      "detected_at_0.5": 29,
+      "false_alarms_at_0.5": 0,
+      "detected_at_0.8": 0,
+      "false_alarms_at_0.8": 0
+    },
+    "d3": {
+      "runs": 370,
+      "incidents": 40,
+      "auc": 0.9797727272727272,
+      "detected_at_0.5": 31,
+      "false_alarms_at_0.5": 0,
+      "detected_at_0.8": 6,
+      "false_alarms_at_0.8": 0
+    }
+  },
+  "both_jurors_min": {
+    "runs": 370,
+    "incidents": 40,
+    "auc": 0.9782575757575758,
+    "detected_at_0.5": 27,
+    "false_alarms_at_0.5": 0,
+    "detected_at_0.8": 0,
+    "false_alarms_at_0.8": 0
+  },
+  "measured_at": "2026-11-08T01:55:52Z"
+}

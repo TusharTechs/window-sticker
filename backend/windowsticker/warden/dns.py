@@ -18,8 +18,9 @@ from windowsticker.domain import EgressEvent
 
 
 def parse_qname(packet: bytes) -> str | None:
-    """Return the first question's name, or None for a malformed packet."""
-    if len(packet) < 12:
+    """Return the question's name, or None for a malformed packet or one that asks more
+    than one question (a second question could otherwise ride past the allowlist check)."""
+    if len(packet) < 12 or struct.unpack(">H", packet[4:6])[0] != 1:
         return None
     labels: list[str] = []
     i = 12

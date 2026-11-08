@@ -84,7 +84,7 @@ def run_row(test_id: str, rec: RunRecord) -> RunRow:
         boot_s=rec.timings.boot_s,
         total_s=rec.timings.total_s,
         teardown_verified=rec.teardown_verified,
-        graded=bool(rec.evidence.steps),
+        graded=rec.evidence.graded,
         record=record_json(rec),
     )
 
