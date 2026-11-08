@@ -1,7 +1,7 @@
 {
  "fps": 30,
- "total": 160.16,
- "frames": 4805,
+ "total": 178.02,
+ "frames": 5341,
  "scenes": [
   {
    "id": "cold",
@@ -47,71 +47,81 @@
    "id": "live",
    "vo": "s05",
    "start": 56.28,
-   "length": 22.0,
+   "length": 25.0,
    "voAt": 56.78,
    "from": 1688,
-   "frames": 660,
+   "frames": 750,
    "voFrom": 1703
   },
   {
    "id": "contain",
    "vo": "s06",
-   "start": 78.28,
+   "start": 81.28,
    "length": 19.24,
-   "voAt": 78.78,
-   "from": 2348,
+   "voAt": 81.78,
+   "from": 2438,
    "frames": 577,
-   "voFrom": 2363
+   "voFrom": 2453
   },
   {
    "id": "results",
    "vo": "s07",
-   "start": 97.52,
+   "start": 100.52,
    "length": 10.47,
-   "voAt": 97.92,
-   "from": 2926,
+   "voAt": 100.92,
+   "from": 3016,
    "frames": 314,
-   "voFrom": 2938
+   "voFrom": 3028
+  },
+  {
+   "id": "machines",
+   "vo": "s07b",
+   "start": 110.99,
+   "length": 15.97,
+   "voAt": 111.49,
+   "from": 3330,
+   "frames": 479,
+   "voFrom": 3345
   },
   {
    "id": "findings",
    "vo": "s08",
-   "start": 107.99,
-   "length": 19.73,
-   "voAt": 108.39,
-   "from": 3240,
-   "frames": 592,
-   "voFrom": 3252
+   "start": 126.96,
+   "length": 18.02,
+   "voAt": 127.36,
+   "from": 3809,
+   "frames": 541,
+   "voFrom": 3821
   },
   {
    "id": "vultr",
    "vo": "s09",
-   "start": 127.72,
+   "start": 144.98,
    "length": 12.72,
-   "voAt": 128.12,
-   "from": 3832,
+   "voAt": 145.38,
+   "from": 4349,
    "frames": 382,
-   "voFrom": 3844
+   "voFrom": 4361
   },
   {
    "id": "business",
    "vo": "s10",
-   "start": 140.44,
+   "start": 157.7,
    "length": 10.58,
-   "voAt": 140.84,
-   "from": 4213,
+   "voAt": 158.1,
+   "from": 4731,
    "frames": 317,
-   "voFrom": 4225
+   "voFrom": 4743
   },
   {
    "id": "close",
    "vo": "s11",
-   "start": 151.02,
-   "length": 9.14,
-   "voAt": 151.62,
-   "from": 4531,
-   "frames": 274,
-   "voFrom": 4549
+   "start": 168.28,
+   "length": 9.74,
+   "voAt": 168.88,
+   "from": 5048,
+   "frames": 292,
+   "voFrom": 5066
   }
  ]
 }

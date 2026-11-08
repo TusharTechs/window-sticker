@@ -2,7 +2,7 @@ import type { FC } from "react";
 import { AbsoluteFill, Audio, Sequence, interpolate, staticFile, useCurrentFrame } from "remotion";
 import durations from "../public/vo/durations.json";
 import { C, Finish, HazardWipe, clamp, sans } from "./kit";
-import { Business, Close, Cold, Contain, Findings, How, Idea, Live, Logo, Results, Vultr } from "./scenes";
+import { Business, Close, Cold, Contain, Findings, How, Idea, Live, Logo, Machines, Results, Vultr } from "./scenes";
 import timeline from "./timeline.json";
 import script from "./vo-script.json";
 
@@ -14,6 +14,7 @@ const SCENES: Record<string, FC<{ dur: number }>> = {
   live: Live,
   contain: Contain,
   results: Results,
+  machines: Machines,
   findings: Findings,
   vultr: Vultr,
   business: Business,
@@ -34,6 +35,7 @@ const WRITTEN: [RegExp, string][] = [
   [/crash test rating/g, "crash-test rating"],
   [/security review packet/g, "security-review packet"],
   [/five hundred and seventy six/g, "576"],
+  [/Debian eleven/g, "Debian 11"],
 ];
 const written = (s: string) => WRITTEN.reduce((acc, [re, to]) => acc.replace(re, to), s);
 

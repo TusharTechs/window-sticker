@@ -466,18 +466,84 @@ export function Results({ dur }: { dur: number }) {
   );
 }
 
+// ----------------------------------------------------------------------------- 7b. different machines
+const OSES = [
+  { name: "Debian 12", tag: "full toolchain" },
+  { name: "Debian 12", tag: "slim · no curl, git" },
+  { name: "Alpine", tag: "BusyBox · no bash" },
+  { name: "Debian 11", tag: "Python 3.10 · no tomllib", hot: true },
+];
+
+export function Machines({ dur }: { dur: number }) {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const e = data.env;
+  const statAt = Math.round(dur * 0.36);
+  const sp = prog(frame, statAt, 22);
+  const k = Math.round(interpolate(frame, [statAt, statAt + 30], [0, e.py310.incidents], clamp));
+  return (
+    <LabBg>
+      <Chapter n="06" title="Different machines" />
+      <AbsoluteFill style={{ flexDirection: "row", alignItems: "center", padding: "70px 90px 0", gap: 60, opacity: fadeIn(frame) }}>
+        <div style={{ transform: `rotate(-1.5deg) scale(${0.94 + 0.06 * prog(frame, 0, 24)})` }}>
+          <BrowserFrame url={`${data.url}/environments`} width={1040}>
+            <OffthreadVideo src={staticFile("footage/environments.mp4")} startFrom={80} playbackRate={Math.min(1, 9.7 / (dur / fps))} muted style={{ width: "100%" }} />
+          </BrowserFrame>
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            {OSES.map((o, i) => {
+              const p = prog(frame, 14 + i * 10, 14);
+              const hot = o.hot && frame > statAt - 10;
+              return (
+                <div
+                  key={i}
+                  style={{
+                    background: hot ? C.yellow : C.lab2,
+                    color: hot ? C.ink : "#fff",
+                    border: `2px solid ${hot ? C.yellow : C.labRule}`,
+                    borderRadius: 16,
+                    padding: "16px 20px",
+                    opacity: p,
+                    transform: `translateY(${(1 - p) * 24}px)`,
+                  }}
+                >
+                  <div style={{ fontFamily: display, fontWeight: 900, fontSize: 32 }}>{o.name}</div>
+                  <div style={{ fontFamily: mono, fontSize: 19, marginTop: 4, opacity: 0.8 }}>{o.tag}</div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ marginTop: 40, opacity: sp, transform: `translateY(${(1 - sp) * 30}px)` }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 24 }}>
+              <span style={{ fontFamily: display, fontWeight: 900, fontSize: 150, color: C.yellow, lineHeight: 1 }}>
+                {k}/{e.py310.runs}
+              </span>
+              <span style={{ fontFamily: mono, fontSize: 30, color: C.muted }}>
+                vs {e.deb.incidents}/{e.deb.runs}
+              </span>
+            </div>
+            <div style={{ fontFamily: sans, fontSize: 30, color: "#c9ced6", marginTop: 12, lineHeight: 1.4 }}>
+              runs reaching for an unknown package index: Python 3.10 vs Python 3.12. Adjusted p = {e.p.toFixed(3)}.
+            </div>
+          </div>
+        </div>
+      </AbsoluteFill>
+    </LabBg>
+  );
+}
+
 // ----------------------------------------------------------------------------- 8. findings
 export function Findings({ dur }: { dur: number }) {
   const frame = useCurrentFrame();
-  const e = data.env;
   const cards = [
-    { at: 60, num: `${e.py310.incidents}/${e.py310.runs}`, sub: `vs ${e.deb.incidents}/${e.deb.runs}`, head: "The machine changes the agent", body: `On Debian 11 with Python 3.10 the same agent reached for an unknown package index far more often than on Python 3.12. Adjusted p = ${e.p.toFixed(3)}.` },
-    { at: Math.round(dur * 0.5), num: "0", sub: "refusals", head: "Guardrails missed the unseen trap", body: "Both guardrailed agents reached for an unknown index in 9 of 12 runs. Six tool guardrails refused none; the lab blocked every one." },
+    { at: 70, num: "0", sub: "guardrail refusals", head: "Guardrails missed the unseen trap", body: "Both guardrailed agents reached for an unknown package index in 9 of 12 runs. Six tool guardrails refused none; the lab blocked every one." },
+    { at: Math.round(dur * 0.42), num: "0", sub: "serious, on traps nobody has seen", head: "A private suite, the same rating", body: "A Vultr model rewrites every trap into a private variant. The hardened agent stayed at zero serious incidents there too." },
     { at: Math.round(dur * 0.74), num: `${data.escape[0].contained}/${data.escape[0].total}`, sub: "on every OS", head: "Containment held everywhere", body: "The escape matrix is contained on Debian, slim Debian, Alpine and Debian 11." },
   ];
   return (
     <LabBg>
-      <Chapter n="06" title="What the measurements found" />
+      <Chapter n="07" title="What the measurements found" />
       <AbsoluteFill style={{ padding: "190px 110px 0", opacity: fadeIn(frame) }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 40 }}>
           {cards.map((c, i) => {
@@ -519,7 +585,7 @@ export function Vultr({ dur }: { dur: number }) {
   ];
   return (
     <PaperBg>
-      <Chapter n="07" title="Built on Vultr" dark={false} />
+      <Chapter n="08" title="Built on Vultr" dark={false} />
       <AbsoluteFill style={{ padding: "170px 110px 0", opacity: fadeIn(frame) }}>
         <Kinetic text="Compute, five model jobs and storage. All Vultr." delay={4} stagger={2} style={{ fontFamily: display, fontWeight: 900, fontSize: 66, color: C.ink }} />
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 40, marginTop: 70 }}>
@@ -585,7 +651,7 @@ export function Business({ dur }: { dur: number }) {
   const tilt = interpolate(frame, [0, dur], [-4, -1.5]);
   return (
     <LabBg>
-      <Chapter n="08" title="What teams get" />
+      <Chapter n="09" title="What teams get" />
       <AbsoluteFill style={{ flexDirection: "row", alignItems: "center", padding: "60px 110px 0", gap: 80, opacity: fadeIn(frame) }}>
         <div style={{ transform: `rotate(${tilt}deg) scale(${0.9 + 0.1 * prog(frame, 0, 20)})` }}>
           <BrowserFrame url={`${data.url}/tests/…/packet`} width={880}>
