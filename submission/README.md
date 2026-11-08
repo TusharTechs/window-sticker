@@ -2,7 +2,7 @@
 
 | File | What it is |
 |---|---|
-| `docs/submission/window-sticker-demo.mp4` | The 2:58 demo video (not in git: upload it; rebuild below) |
+| `docs/submission/window-sticker-demo.mp4` | The 2:58 demo video, published at https://youtu.be/Y1NaXn9gOqo (not in git; rebuild below) |
 | `docs/submission/window-sticker-thumbnail.png` | Video thumbnail |
 | `docs/submission/window-sticker-deck.pdf` | 12-slide pitch deck, numbers pulled live from the API |
 | `docs/submission/security-review-packet-example.pdf` | A security-review packet, as a vendor would attach it |

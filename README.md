@@ -17,6 +17,11 @@
   <img src="https://img.shields.io/badge/runs%20on-Vultr-007bfc" alt="Runs on Vultr" />
 </p>
 
+<p align="center">
+  <a href="https://youtu.be/Y1NaXn9gOqo"><img src="docs/submission/youtube-thumbnail.png" width="640" alt="Watch the 2:58 demo video on YouTube" /></a><br/>
+  <a href="https://youtu.be/Y1NaXn9gOqo"><b>▶ Watch the 2:58 demo on YouTube</b></a>
+</p>
+
 > Built for the lablab.ai **Vultr: Agent Rush** hackathon, **Challenge 1: Blast Radius Zero**.
 
 ---
@@ -34,7 +39,7 @@
 | Methodology: containment, grading, statistics, limits | https://107-191-39-70.sslip.io/methodology |
 | The published trap suite | https://107-191-39-70.sslip.io/suite |
 | Public JSON API (example) | https://107-191-39-70.sslip.io/api/leaderboard?suite=v2 |
-| Demo video (2:58) | attached to the lablab submission; built from [`submission/video`](submission/video) |
+| **Demo video (2:58)** | https://youtu.be/Y1NaXn9gOqo (source: [`submission/video`](submission/video)) |
 | Pitch deck (PDF) | [docs/submission/window-sticker-deck.pdf](docs/submission/window-sticker-deck.pdf) |
 | Example security-review packet (PDF) | [docs/submission/security-review-packet-example.pdf](docs/submission/security-review-packet-example.pdf) |
 | How each judging criterion is met | [docs/JUDGING.md](docs/JUDGING.md) |
@@ -223,7 +228,7 @@ sequenceDiagram
 | Criterion | What we built | Where to see it |
 |---|---|---|
 | **Application of Technology**: how effectively the models are integrated | Vultr Serverless Inference does five measured jobs: **6 agent models** under test; **OpenCode inside the VM** through a keyless, metered lane; the **System One jury** (`clef`, `d3`; AUC 0.98 on 370 runs, used as triage); an **incident analyst** that explains every incident; a **trap-variant writer** that builds private suites. On Vultr Compute: one libkrun microVM per run on a VX1 host, four OS images, 17/17 and 22/22 escape matrices. Vultr Object Storage keeps every run's evidence. | `/leaderboard`, `/methodology`, any incident replay, `/environments` |
-| **Presentation**: clarity and effectiveness | A guided nine-step **tour** with a **live crash test** the judge starts (six real microVM runs, about a minute); a hero replay of real tests; step-by-step run replays with "What the lab stopped"; a 2:58 demo video; a 12-slide deck; every page checked in Chromium, Firefox, WebKit and on phones. | `/tour`, `/runs/run_6970f519ab05`, demo video, deck |
+| **Presentation**: clarity and effectiveness | A guided nine-step **tour** with a **live crash test** the judge starts (six real microVM runs, about a minute); a hero replay of real tests; step-by-step run replays with "What the lab stopped"; a 2:58 demo video; a 12-slide deck; every page checked in Chromium, Firefox, WebKit and on phones. | `/tour`, `/runs/run_6970f519ab05`, [demo video](https://youtu.be/Y1NaXn9gOqo), deck |
 | **Business Value**: impact and practical fit | Buyers (platform and security teams), vendors (stuck in security reviews) and teams shipping prompt changes. A **security-review packet** mapped to the **OWASP Top 10 for LLM Applications**; a **GitHub Action** gate; measured unit economics (a 96-run rating costs about $0.50 all-in); a proposed model of free engine, $49 per published sticker, $199 per CI-gated agent per month. | `/tests/<id>/packet`, `action/`, landing page |
 | **Originality**: uniqueness and the ability to demonstrate behaviours | **A rating of the agent, not a test of the cage.** Exact-interval stars, held-out traps, **private model-reworded trap suites** so a rating cannot be trained against, the **same agent on four operating systems** with a statistical test of whether the machine changed its behaviour, and published grader bugs with every changed verdict. | `/environments`, [docs/VALIDATION.md](docs/VALIDATION.md) |
 
