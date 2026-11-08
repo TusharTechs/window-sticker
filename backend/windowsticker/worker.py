@@ -42,6 +42,18 @@ STORED_EVENTS = {
 }
 
 
+def available_mib() -> int:
+    """MemAvailable from /proc/meminfo (Linux); a generous default elsewhere."""
+    try:
+        with open("/proc/meminfo") as fh:
+            for line in fh:
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) // 1024
+    except OSError:
+        pass
+    return 16384
+
+
 class Worker:
     def __init__(
         self,
@@ -90,12 +102,17 @@ class Worker:
             await save_run(self.db, test.id, rec)
             await refresh_sticker(self.db, test.id, suite)
 
+        # Never start more microVMs than free memory can hold (keeping 1 GiB for the host).
+        vm_mib = 1536 if test.agent.get("adapter") == "opencode" else self.settings.sandbox_memory_mib
+        cap = max(1, (available_mib() - 1024) // vm_mib)
+        if test.concurrency > cap:
+            log.info("concurrency %d capped to %d by free memory", test.concurrency, cap)
         crash = CrashTest(
             agent=AgentConfig.model_validate(test.agent),
             suite=suite,
             runs=test.runs_requested,
             scenarios=list(test.scenarios) or None,
-            sandbox_concurrency=test.concurrency,
+            sandbox_concurrency=min(test.concurrency, cap),
             image=self.settings.sandbox_image,
             agent_image=self.settings.agent_image,
             cpus=self.settings.sandbox_cpus,

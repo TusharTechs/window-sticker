@@ -5,26 +5,36 @@ from __future__ import annotations
 import asyncio
 import hmac
 import json
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import (
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
 
 from windowsticker import __version__
 from windowsticker.agents.config import AgentConfig
 from windowsticker.agents.guardrails import PROFILES, GuardrailEngine
-from windowsticker.db.models import EventRow, RunRow, TestRow
+from windowsticker.db.models import EventRow, LabelRow, RunRow, TestRow
 from windowsticker.db.session import Database
-from windowsticker.service import create_test, label_run, refresh_sticker, run_counts
+from windowsticker.service import create_test, label_run, result_for, run_counts
 from windowsticker.stats.ab import compare_rates
 from windowsticker.stats.rating import MIN_TRIALS_FOR_RATING, THRESHOLDS, runs_needed_for
-from windowsticker.sticker.render import render_badge, render_sticker
+from windowsticker.sticker.render import render_badge, render_sticker, sticker_data
 from windowsticker.traps.loader import load_suite
 
 SVG = "image/svg+xml"
@@ -92,24 +102,54 @@ def _run_out(r: RunRow, full: bool = False) -> dict[str, Any]:
     return out
 
 
+class RateLimiter:
+    """Fixed-window per-client limiter for the public API (behind Caddy, one hop)."""
+
+    def __init__(self, per_minute: int) -> None:
+        self.per_minute = per_minute
+        self._window = 0
+        self._counts: dict[str, int] = {}
+
+    def allow(self, client: str) -> bool:
+        window = int(time.monotonic() // 60)
+        if window != self._window:
+            self._window, self._counts = window, {}
+        self._counts[client] = self._counts.get(client, 0) + 1
+        return self._counts[client] <= self.per_minute
+
+
 def create_app(
     db: Database,
     *,
     admin_token: str | None = None,
+    submit_token: str | None = None,
+    label_token: str | None = None,
     max_runs_per_test: int = 240,
+    requests_per_minute: int = 240,
+    max_event_sockets: int = 64,
     cors_origins: list[str] | None = None,
 ) -> FastAPI:
-    """Build the API. Reads are public. Writes need ``Authorization: Bearer <admin_token>``;
-    with no token configured, writes are refused outright (fail closed)."""
+    """Build the API. Reads are public. Writes need a bearer token, scoped by action:
+    ``submit_token`` may start tests, ``label_token`` may label runs, ``admin_token`` may do
+    both. With no token configured for an action, it is refused outright (fail closed)."""
 
-    def require_writer(authorization: str | None = Header(default=None)) -> None:
-        if not admin_token:
-            raise HTTPException(503, "writes are disabled: no access token is configured")
-        supplied = (authorization or "").removeprefix("Bearer ").strip()
-        if not hmac.compare_digest(supplied.encode(), admin_token.encode()):
-            raise HTTPException(
-                401, "a valid access token is required to start tests or label runs"
-            )
+    def _check(authorization: str | None, accepted: list[str], what: str) -> None:
+        tokens = [t for t in accepted if t]
+        if not tokens:
+            raise HTTPException(503, f"{what} is disabled: no access token is configured")
+        supplied = (authorization or "").removeprefix("Bearer ").strip().encode()
+        if not any(hmac.compare_digest(supplied, t.encode()) for t in tokens):
+            raise HTTPException(401, f"a valid access token is required to {what}")
+
+    def require_submitter(authorization: str | None = Header(default=None)) -> None:
+        _check(authorization, [submit_token or "", admin_token or ""], "start tests")
+
+    def require_labeller(authorization: str | None = Header(default=None)) -> None:
+        _check(authorization, [label_token or "", admin_token or ""], "label runs")
+
+    require_writer = require_submitter
+    limiter = RateLimiter(requests_per_minute)
+    open_sockets: dict[str, int] = {}
 
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -118,6 +158,17 @@ def create_app(
         await db.dispose()
 
     app = FastAPI(title="Window Sticker", version=__version__, lifespan=lifespan)
+
+    @app.middleware("http")
+    async def rate_limit(request: Request, call_next: Any) -> Any:
+        if request.url.path.startswith("/api/"):
+            # Caddy is the only proxy; its X-Forwarded-For first hop is the real client.
+            client = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+            client = client or (request.client.host if request.client else "?")
+            if not limiter.allow(client):
+                return JSONResponse({"detail": "rate limit exceeded"}, status_code=429)
+        return await call_next(request)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=cors_origins or ["*"],
@@ -135,7 +186,11 @@ def create_app(
 
     @app.get("/api/health")
     async def health() -> dict[str, Any]:
-        return {"ok": True, "version": __version__, "writes_enabled": bool(admin_token)}
+        return {
+            "ok": True,
+            "version": __version__,
+            "writes_enabled": bool(admin_token or submit_token),
+        }
 
     @app.get("/api/auth/check", dependencies=[Depends(require_writer)])
     async def auth_check() -> dict[str, bool]:
@@ -175,7 +230,9 @@ def create_app(
 
     @app.get("/api/jury-report")
     async def jury_report() -> dict[str, Any]:
-        data: dict[str, Any] = json.loads((Path(__file__).parents[1] / "jury_report.json").read_text())
+        data: dict[str, Any] = json.loads(
+            (Path(__file__).parents[1] / "jury_report.json").read_text()
+        )
         return data
 
     @app.get("/api/escape-matrix")
@@ -253,7 +310,12 @@ def create_app(
     @app.get("/api/tests/{test_id}/sticker.json")
     async def sticker_json(test_id: str) -> dict[str, Any]:
         t = await _get_test(test_id)
-        return t.sticker or await refresh_sticker(db, test_id)
+        if t.sticker:
+            return t.sticker
+        # Never write on a GET: compute the sticker without storing it.
+        data = sticker_data(await result_for(db, t), load_suite(t.suite))
+        data.update(precomputed=t.precomputed, label=t.label)
+        return data
 
     @app.get("/api/tests/{test_id}/sticker.svg")
     async def sticker_svg(test_id: str) -> Response:
@@ -269,6 +331,16 @@ def create_app(
 
     @app.get("/api/compare")
     async def compare(a: str, b: str) -> dict[str, Any]:
+        ta, tb = await _get_test(a), await _get_test(b)
+        if (ta.suite, ta.suite_digest, sorted(ta.scenarios)) != (
+            tb.suite,
+            tb.suite_digest,
+            sorted(tb.scenarios),
+        ):
+            raise HTTPException(
+                422,
+                "these tests used different trap suites or trap sets, so their rates are not comparable",
+            )
         sa, sb = await sticker_json(a), await sticker_json(b)
         ka = round(sa["serious_per_1000"]["point"] * sa["runs"] / 1000)
         kb = round(sb["serious_per_1000"]["point"] * sb["runs"] / 1000)
@@ -326,9 +398,29 @@ def create_app(
     async def get_run(run_id: str) -> dict[str, Any]:
         async with db.session() as s:
             r = await s.get(RunRow, run_id)
+            labels = (
+                (
+                    await s.execute(
+                        select(LabelRow).where(LabelRow.run_id == run_id).order_by(LabelRow.at)
+                    )
+                )
+                .scalars()
+                .all()
+            )
         if r is None:
             raise HTTPException(404, "run not found")
-        return _run_out(r, full=True)
+        out = _run_out(r, full=True)
+        # Audit trail: every human label, who gave it and when.
+        out["labels"] = [
+            {
+                "incident": lab.incident,
+                "labeller": lab.labeller,
+                "note": lab.note,
+                "at": lab.at.isoformat(),
+            }
+            for lab in labels
+        ]
+        return out
 
     @app.get("/api/labels/queue")
     async def label_queue(limit: int = Query(50, le=200)) -> list[dict[str, Any]]:
@@ -347,7 +439,7 @@ def create_app(
             )
         return [_run_out(r) for r in rows]
 
-    @app.post("/api/runs/{run_id}/label", dependencies=[Depends(require_writer)])
+    @app.post("/api/runs/{run_id}/label", dependencies=[Depends(require_labeller)])
     async def post_label(run_id: str, body: LabelIn) -> dict[str, Any]:
         try:
             test_id = await label_run(db, run_id, body.incident, body.labeller, body.note)
@@ -358,8 +450,18 @@ def create_app(
     # ------------------------------------------------------------------ live events
     @app.websocket("/api/tests/{test_id}/events")
     async def events_ws(ws: WebSocket, test_id: str, after: int = 0) -> None:
+        async with db.session() as s:
+            test = await s.get(TestRow, test_id)
+        if test is None:
+            await ws.close(code=4404)
+            return
+        if sum(open_sockets.values()) >= max_event_sockets or open_sockets.get(test_id, 0) >= 16:
+            await ws.close(code=4429)
+            return
         await ws.accept()
+        open_sockets[test_id] = open_sockets.get(test_id, 0) + 1
         last = after
+        idle = 0
         try:
             while True:
                 async with db.session() as s:
@@ -386,10 +488,22 @@ def create_app(
                             "payload": e.payload,
                         }
                     )
-                if not rows:
-                    await asyncio.sleep(0.4)
+                if rows:
+                    idle = 0
+                    continue
+                idle += 1
+                # Once the test is over and the stream is drained, stop polling.
+                if idle % 10 == 0:
+                    async with db.session() as s:
+                        t = await s.get(TestRow, test_id)
+                    if t is None or t.status in ("finished", "failed", "cancelled"):
+                        await ws.close(code=1000)
+                        return
+                await asyncio.sleep(0.5)
         except WebSocketDisconnect:
             return
+        finally:
+            open_sockets[test_id] = max(0, open_sockets.get(test_id, 1) - 1)
 
     @app.get("/api/tests/{test_id}/events")
     async def events_http(

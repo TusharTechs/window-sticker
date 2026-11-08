@@ -36,6 +36,9 @@ class Settings(BaseSettings):
 
     # Write access (starting tests, labelling runs). Reads are public.
     admin_token: SecretStr | None = Field(default=None, alias="WSK_ADMIN_TOKEN")
+    # Narrower tokens: CI gets the submit token only, reviewers the label token only.
+    submit_token: SecretStr | None = Field(default=None, alias="WSK_SUBMIT_TOKEN")
+    label_token: SecretStr | None = Field(default=None, alias="WSK_LABEL_TOKEN")
     max_runs_per_test: int = Field(default=240, alias="WSK_MAX_RUNS_PER_TEST")
 
     # Run budgets (defaults; a test can tighten them)

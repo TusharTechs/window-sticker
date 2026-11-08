@@ -10,8 +10,20 @@ EnvironmentFile=/home/wsk/window-sticker/.env
 ExecStart=/home/wsk/.local/bin/uv run --no-sync windowsticker serve --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=3
+# Least privilege: read-only system and home, no new privileges, bounded memory.
 NoNewPrivileges=true
 PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/wsk/.cache
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+MemoryMax=768M
 
 [Install]
 WantedBy=multi-user.target

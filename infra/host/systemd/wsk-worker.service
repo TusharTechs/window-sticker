@@ -13,6 +13,16 @@ Restart=always
 RestartSec=5
 # In-flight microVMs end on their own: each has a runtime-enforced max_duration.
 TimeoutStopSec=60
+# The worker needs /dev/kvm and its own storage, so it is hardened less than the API, but it
+# still cannot gain privileges or touch system files, and the memory cap bounds every microVM
+# it starts (they run in this unit's cgroup).
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectKernelModules=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryMax=7G
 
 [Install]
 WantedBy=multi-user.target

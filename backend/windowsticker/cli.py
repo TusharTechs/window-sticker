@@ -455,10 +455,15 @@ def serve(host: str = "127.0.0.1", port: int = 8000) -> None:
     from windowsticker.db.session import Database
 
     settings = get_settings()
-    token = settings.admin_token.get_secret_value() if settings.admin_token else None
+
+    def secret(v: Any) -> str | None:
+        return v.get_secret_value() if v else None
+
     api_app = create_app(
         Database(settings.database_url),
-        admin_token=token,
+        admin_token=secret(settings.admin_token),
+        submit_token=secret(settings.submit_token),
+        label_token=secret(settings.label_token),
         max_runs_per_test=settings.max_runs_per_test,
     )
     # Only trust X-Forwarded-* from the local reverse proxy (Caddy).

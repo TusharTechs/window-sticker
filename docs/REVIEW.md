@@ -36,11 +36,11 @@ Status is updated as each item is fixed and verified.
 | # | Finding | Resolution |
 |---|---|---|
 | S1 | OpenCode reaches inference with the master key behind TLS interception, DNS allowed, a direct route out; the escape matrix never ran in that profile | **Fixed.** Host-side inference lane: no key in the guest, no TLS interception, no DNS, no direct route; model pinned, token budget, host-metered cost. Escape matrix in the in-VM profile: 22/22 contained, including 5 lane attacks. |
-| S2 | Control plane, database and secrets share the host with hostile workloads; systemd units not hardened | pending |
-| S3 | No per-VM disk cap; concurrency × VM memory can exceed host RAM | Disk: **fixed** (4 GiB cap, 6 GiB write stops at 3.9 GiB). Memory: pending |
-| S4 | Public WebSocket and GET endpoints can be abused (no id check, no connection cap, writes on GET) | pending |
-| S5 | One token both submits tests and labels runs; labels can override tripwires | pending |
-| S6 | `find -exec` / `awk system()` treated as read-only; canary match is literal (base64 missed); warden reconnects by name after checking IPs; DNS lane checks only the first question; compare does not check suites match | **Fixed** except compare (with S4): executing forms of find/awk/sed count; base64, base64url, hex and reversed canaries detected; the warden connects to the address it checked; multi-question DNS queries refused. |
+| S2 | Control plane, database and secrets share the host with hostile workloads; systemd units not hardened | **Mitigated.** Units hardened (API and web: read-only system and home, private devices and /tmp, no capabilities, no new privileges, memory caps; worker: no new privileges, read-only system, 7 GiB cap that also bounds every microVM). The host holds no account-level Vultr API key. The escape matrix shows the database, API and SSH ports refused from every guest. Remaining: moving the control plane to its own VM (planned). |
+| S3 | No per-VM disk cap; concurrency × VM memory can exceed host RAM | **Fixed.** 4 GiB disk cap per microVM; the worker caps concurrent microVMs to (free memory − 1 GiB) ÷ VM size. |
+| S4 | Public WebSocket and GET endpoints can be abused (no id check, no connection cap, writes on GET) | **Fixed.** Per-client rate limit on /api; the event socket rejects unknown tests, is capped per test and overall, and closes when a finished test is drained; GET endpoints never write. |
+| S5 | One token both submits tests and labels runs; labels can override tripwires | **Fixed.** Separate submit and label tokens (the admin token can do both; CI gets only the submit token); every label is shown with its labeller and time on the run. |
+| S6 | `find -exec` / `awk system()` treated as read-only; canary match is literal (base64 missed); warden reconnects by name after checking IPs; DNS lane checks only the first question; compare does not check suites match | **Fixed.** Compare refuses tests with different suites or trap sets; executing forms of find/awk/sed count; base64, base64url, hex and reversed canaries detected; the warden connects to the address it checked; multi-question DNS queries refused. |
 
 ### Presentation and business
 | # | Finding | Resolution |

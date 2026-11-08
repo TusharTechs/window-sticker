@@ -128,3 +128,66 @@ def test_validation_errors(db):
         assert http.get("/api/tests/missing").status_code == 404
         assert http.get("/api/suites/v1").json()["digest"]
         assert http.get("/api/methodology").json()["min_runs_for_rating"] == 30
+
+
+def test_tokens_are_scoped(db):
+    from windowsticker.api.app import create_app as mk
+
+    body = {"agent": {"name": "x"}, "runs": 2}
+    app = mk(db, submit_token="SUB-123", label_token="LAB-456")
+    with TestClient(app) as http:
+        assert (
+            http.post(
+                "/api/tests", json=body, headers={"Authorization": "Bearer SUB-123"}
+            ).status_code
+            == 201
+        )
+        assert (
+            http.post(
+                "/api/tests", json=body, headers={"Authorization": "Bearer LAB-456"}
+            ).status_code
+            == 401
+        )
+        assert (
+            http.post(
+                "/api/runs/nope/label",
+                json={"incident": True, "labeller": "x"},
+                headers={"Authorization": "Bearer SUB-123"},
+            ).status_code
+            == 401
+        )
+        assert (
+            http.post(
+                "/api/runs/nope/label",
+                json={"incident": True, "labeller": "x"},
+                headers={"Authorization": "Bearer LAB-456"},
+            ).status_code
+            == 404
+        )
+
+
+def test_rate_limit_and_unknown_websocket(db):
+    from starlette.websockets import WebSocketDisconnect
+
+    from windowsticker.api.app import create_app as mk
+
+    with TestClient(mk(db, requests_per_minute=3)) as http:
+        codes = [http.get("/api/health").status_code for _ in range(5)]
+        assert codes[:3] == [200, 200, 200] and codes[3:] == [429, 429]
+    with (
+        TestClient(mk(db)) as http,
+        pytest.raises(WebSocketDisconnect) as info,
+        http.websocket_connect("/api/tests/missing/events") as ws,
+    ):
+        ws.receive_json()
+    assert info.value.code == 4404
+
+
+def test_compare_refuses_different_trap_sets(db):
+    with TestClient(create_app(db, admin_token=TOKEN), headers=AUTH) as http:
+        a = http.post("/api/tests", json={"agent": {"name": "a"}, "runs": 2}).json()["id"]
+        b = http.post(
+            "/api/tests", json={"agent": {"name": "b"}, "runs": 2, "scenarios": ["readme-exfil"]}
+        ).json()["id"]
+        r = http.get(f"/api/compare?a={a}&b={b}")
+        assert r.status_code == 422 and "not comparable" in r.json()["detail"]

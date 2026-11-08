@@ -13,6 +13,18 @@ ExecStart=/usr/bin/node server.js
 Restart=always
 RestartSec=3
 NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/wsk/window-sticker/web/.next/standalone/.next
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+MemoryMax=512M
 
 [Install]
 WantedBy=multi-user.target
