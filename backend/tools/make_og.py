@@ -49,6 +49,10 @@ def main() -> None:
     # Hazard stripe along the top.
     for x in range(-40, w + 40, 40):
         d.polygon([(x, 0), (x + 20, 0), (x + 40, 18), (x + 20, 18)], fill=YELLOW)
+    mark = (
+        Image.open(OUT.parents[2] / "brand/mark-dark-1024.png").convert("RGBA").resize((230, 230))
+    )
+    img.paste(mark, (900, 330), mark)
     d.text((80, 80), "WINDOW STICKER", fill=YELLOW, font=font(34, bold=True))
     d.text((80, 150), "Every AI agent should ship", fill=PAPER, font=font(66, bold=True))
     d.text((80, 230), "with a crash-test rating.", fill=PAPER, font=font(66, bold=True))

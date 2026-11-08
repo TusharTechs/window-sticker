@@ -5,11 +5,13 @@ from __future__ import annotations
 import asyncio
 import hmac
 import json
+import secrets
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import (
     Depends,
@@ -31,6 +33,7 @@ from windowsticker.agents.config import AgentConfig
 from windowsticker.agents.guardrails import PROFILES, GuardrailEngine
 from windowsticker.db.models import EventRow, LabelRow, RunRow, TestRow
 from windowsticker.db.session import Database
+from windowsticker.environments import DEFAULT_ENVIRONMENT, ENVIRONMENTS
 from windowsticker.service import create_test, is_internal, label_run, result_for, run_counts
 from windowsticker.stats.ab import compare_rates
 from windowsticker.stats.rating import MIN_TRIALS_FOR_RATING, THRESHOLDS, runs_needed_for
@@ -40,6 +43,11 @@ from windowsticker.traps.loader import load_suite
 SVG = "image/svg+xml"
 
 
+def _aware(dt: datetime) -> datetime:
+    """SQLite returns naive datetimes; Postgres returns aware ones. Both are UTC."""
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)
+
+
 class CreateTest(BaseModel):
     agent: AgentConfig
     runs: int = Field(48, ge=1, le=1000)
@@ -47,6 +55,36 @@ class CreateTest(BaseModel):
     scenarios: list[str] = Field(default_factory=list)
     concurrency: int = Field(8, ge=1, le=16)
     label: str = ""
+
+
+# The public live demo: a small, fixed-cost crash test anyone can start without a token.
+DEMO_MODELS = ("deepseek-v4.1-flash-1017", "qwen3.8-flash-next", "minimax-m3.1-flash")
+DEMO_TRAPS = ("pip-conf-index", "netcheck-dns-exfil", "dependency-confusion")
+DEMO_RUNS = 6
+DEMO_LABEL = "Live demo"
+DEMO_PROFILE_NAMES = {
+    "none": "no guardrails",
+    "prompt-only": "prompt guardrail only",
+    "hardened": "hardened",
+}
+
+
+class DemoIn(BaseModel):
+    model: str = DEMO_MODELS[0]
+    profile: Literal["none", "prompt-only", "hardened"] = "none"
+    environment: str = DEFAULT_ENVIRONMENT
+
+
+MATRIX_PREFIX = "Environment matrix "
+
+
+class CreateMatrix(BaseModel):
+    agent: AgentConfig
+    environments: list[str] = Field(default_factory=lambda: list(ENVIRONMENTS), min_length=2)
+    runs: int = Field(48, ge=1, le=1000)
+    suite: str = "v2"
+    scenarios: list[str] = Field(default_factory=list)
+    concurrency: int = Field(8, ge=1, le=16)
 
 
 class LabelIn(BaseModel):
@@ -71,6 +109,10 @@ def _test_out(t: TestRow, counts: dict[str, int] | None = None) -> dict[str, Any
         "runs_requested": t.runs_requested,
         "concurrency": t.concurrency,
         "label": t.label,
+        "environment": t.environment or DEFAULT_ENVIRONMENT,
+        "environment_title": ENVIRONMENTS.get(
+            t.environment or DEFAULT_ENVIRONMENT, ENVIRONMENTS[DEFAULT_ENVIRONMENT]
+        ).title,
         "precomputed": t.precomputed,
         "worker": t.worker,
         "created_at": t.created_at.isoformat() if t.created_at else None,
@@ -131,6 +173,8 @@ def create_app(
     requests_per_minute: int = 240,
     max_event_sockets: int = 64,
     cors_origins: list[str] | None = None,
+    demo_daily_limit: int = 30,
+    demo_cooldown_s: float = 600.0,
 ) -> FastAPI:
     """Build the API. Reads are public. Writes need a bearer token, scoped by action:
     ``submit_token`` may start tests, ``label_token`` may label runs, ``admin_token`` may do
@@ -280,6 +324,175 @@ def create_app(
             raise HTTPException(422, str(exc)) from exc
         return _test_out(row)
 
+    # ------------------------------------------------------------ environments
+    @app.get("/api/environments")
+    async def environments() -> list[dict[str, str]]:
+        return [
+            {"id": e.id, "image": e.image, "title": e.title, "os": e.os, "notes": e.notes}
+            for e in ENVIRONMENTS.values()
+        ]
+
+    @app.post("/api/matrix", status_code=201, dependencies=[Depends(require_writer)])
+    async def post_matrix(body: CreateMatrix) -> dict[str, Any]:
+        """The same agent and traps, one test per environment, grouped as a matrix."""
+        unknown = [e for e in body.environments if e not in ENVIRONMENTS]
+        if unknown:
+            raise HTTPException(422, f"unknown environment(s): {', '.join(unknown)}")
+        if body.runs > max_runs_per_test:
+            raise HTTPException(422, f"at most {max_runs_per_test} runs per test")
+        matrix_id = "mx_" + secrets.token_hex(4)
+        rows = []
+        for env in dict.fromkeys(body.environments):
+            rows.append(
+                await create_test(
+                    db,
+                    body.agent,
+                    body.runs,
+                    suite=body.suite,
+                    scenarios=body.scenarios or None,
+                    concurrency=body.concurrency,
+                    label=MATRIX_PREFIX + matrix_id,
+                    environment=env,
+                )
+            )
+        return {"matrix_id": matrix_id, "tests": [_test_out(r) for r in rows]}
+
+    async def _matrix_tests(matrix_id: str | None = None) -> list[TestRow]:
+        async with db.session() as s:
+            q = select(TestRow).where(TestRow.label.startswith(MATRIX_PREFIX))
+            if matrix_id:
+                q = select(TestRow).where(TestRow.label == MATRIX_PREFIX + matrix_id)
+            return list((await s.execute(q.order_by(TestRow.created_at))).scalars().all())
+
+    def _matrix_out(matrix_id: str, rows: list[TestRow]) -> dict[str, Any]:
+        order = list(ENVIRONMENTS)
+        rows = sorted(
+            rows, key=lambda t: order.index(t.environment) if t.environment in order else 99
+        )
+        base = next((t for t in rows if t.environment == DEFAULT_ENVIRONMENT), rows[0])
+        out_rows = []
+        for t in rows:
+            row = _test_out(t)
+            st, bs = t.sticker, base.sticker
+            if st and bs and t is not base:
+
+                def k(x: dict[str, Any], key: str) -> int:
+                    return round(float(x[key]["point"]) * int(x["runs"]) / 1000)
+
+                ser = compare_rates(
+                    k(bs, "serious_per_1000"), bs["runs"], k(st, "serious_per_1000"), st["runs"]
+                )
+                anyi = compare_rates(
+                    k(bs, "any_per_1000"), bs["runs"], k(st, "any_per_1000"), st["runs"]
+                )
+                row["versus_baseline"] = {
+                    "serious_p": ser.p_value,
+                    "any_p": anyi.p_value,
+                    "serious_change_per_1000": ser.absolute_change * 1000,
+                    "any_change_per_1000": anyi.absolute_change * 1000,
+                    "changed": ser.significant or anyi.significant,
+                }
+            out_rows.append(row)
+        statuses = {t.status for t in rows}
+        return {
+            "matrix_id": matrix_id,
+            "agent_name": base.agent_name,
+            "model": base.model,
+            "baseline": base.environment,
+            "status": "running" if statuses & {"queued", "running"} else "finished",
+            "created_at": rows[0].created_at.isoformat() if rows[0].created_at else None,
+            "tests": out_rows,
+        }
+
+    @app.get("/api/matrices")
+    async def matrices() -> list[dict[str, Any]]:
+        groups: dict[str, list[TestRow]] = {}
+        for t in await _matrix_tests():
+            groups.setdefault(t.label.removeprefix(MATRIX_PREFIX), []).append(t)
+        out = [_matrix_out(mid, rows) for mid, rows in groups.items()]
+        return sorted(out, key=lambda m: m["created_at"] or "", reverse=True)
+
+    @app.get("/api/matrix/{matrix_id}")
+    async def matrix(matrix_id: str) -> dict[str, Any]:
+        rows = await _matrix_tests(matrix_id)
+        if not rows:
+            raise HTTPException(404, "matrix not found")
+        return _matrix_out(matrix_id, rows)
+
+    demo_last_start: dict[str, float] = {}
+
+    @app.get("/api/demo")
+    async def demo_info() -> dict[str, Any]:
+        """What the live demo runs, and whether it can start right now."""
+        start_of_day = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+        async with db.session() as s:
+            rows = (
+                (await s.execute(select(TestRow).where(TestRow.label == DEMO_LABEL)))
+                .scalars()
+                .all()
+            )
+        today = [t for t in rows if t.created_at and _aware(t.created_at) >= start_of_day]
+        active = [t for t in rows if t.status in ("queued", "running")]
+        return {
+            "enabled": demo_daily_limit > 0,
+            "models": list(DEMO_MODELS),
+            "profiles": list(DEMO_PROFILE_NAMES),
+            "traps": list(DEMO_TRAPS),
+            "environments": [{"id": e.id, "title": e.title} for e in ENVIRONMENTS.values()],
+            "runs": DEMO_RUNS,
+            "remaining_today": max(0, demo_daily_limit - len(today)),
+            "active": [_test_out(t) for t in active],
+        }
+
+    @app.post("/api/demo", status_code=201)
+    async def start_demo(body: DemoIn, request: Request) -> dict[str, Any]:
+        """Start a live demo crash test. No token: bounded by a per-visitor cooldown, a cap on
+        demos in flight and a daily budget, and kept off the leaderboard."""
+        if demo_daily_limit <= 0:
+            raise HTTPException(503, "the live demo is turned off")
+        if body.model not in DEMO_MODELS:
+            raise HTTPException(422, f"model must be one of {', '.join(DEMO_MODELS)}")
+        if body.environment not in ENVIRONMENTS:
+            raise HTTPException(422, f"environment must be one of {', '.join(ENVIRONMENTS)}")
+        info = await demo_info()
+        if info["active"] and len(info["active"]) >= 2:
+            raise HTTPException(
+                409,
+                {
+                    "message": "two live demos are already running; watch one of them",
+                    "active": [t["id"] for t in info["active"]],
+                },
+            )
+        if info["remaining_today"] <= 0:
+            raise HTTPException(429, "today's live demos are used up; replays are always available")
+        client = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+        client = client or (request.client.host if request.client else "?")
+        now = time.monotonic()
+        last = demo_last_start.get(client)
+        if last is not None and now - last < demo_cooldown_s:
+            wait = int(demo_cooldown_s - (now - last))
+            raise HTTPException(
+                429,
+                f"one live demo per visitor every {int(demo_cooldown_s // 60)} minutes; try again in {wait}s",
+            )
+        agent = AgentConfig(
+            name=f"Live demo · {DEMO_PROFILE_NAMES[body.profile]}",
+            model=body.model,
+            guardrails=PROFILES[body.profile],
+        )
+        row = await create_test(
+            db,
+            agent,
+            DEMO_RUNS,
+            suite="v2",
+            scenarios=list(DEMO_TRAPS),
+            concurrency=DEMO_RUNS,
+            label=DEMO_LABEL,
+            environment=body.environment,
+        )
+        demo_last_start[client] = now
+        return _test_out(row)
+
     @app.get("/api/tests")
     async def list_tests(
         limit: int = Query(50, le=200), include_internal: bool = False
@@ -407,8 +620,12 @@ def create_app(
         attempts: dict[str, int] = {}
         for t in rows:
             if (
-                t.scenarios or not t.sticker or is_internal(t)
-            ):  # focused/internal tests are not ranked
+                t.scenarios
+                or not t.sticker
+                or is_internal(t)
+                or (t.environment or DEFAULT_ENVIRONMENT) != DEFAULT_ENVIRONMENT
+                or t.label.startswith(MATRIX_PREFIX)
+            ):  # focused, internal and cross-environment tests are not ranked
                 continue
             # Per agent configuration keep the strongest evidence: rated over provisional,
             # then more runs, then older. A small smoke test never displaces a full test.

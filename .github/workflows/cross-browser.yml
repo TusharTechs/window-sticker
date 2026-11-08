@@ -1,0 +1,22 @@
+# Cross-browser and cross-device checks of the deployed product: every page renders without
+# errors and without sideways scrolling in Chromium, Firefox and WebKit, desktop and phone.
+name: Cross-browser checks
+on:
+  schedule: [{ cron: "0 6 * * *" }]
+  workflow_dispatch:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    defaults: { run: { working-directory: web } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm, cache-dependency-path: web/pnpm-lock.yaml }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - run: pnpm e2e
+        env:
+          WSK_E2E_URL: ${{ vars.WINDOW_STICKER_URL }}

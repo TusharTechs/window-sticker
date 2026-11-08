@@ -36,6 +36,8 @@ class TestRow(Base):
     concurrency: Mapped[int] = mapped_column(Integer, default=8)
     label: Mapped[str] = mapped_column(String(200), default="")  # e.g. "guardrail A/B: B"
     precomputed: Mapped[bool] = mapped_column(Boolean, default=False)  # shown as such in the UI
+    # Which machine the microVMs boot (see windowsticker.environments).
+    environment: Mapped[str] = mapped_column(String(32), default="debian", server_default="debian")
     worker: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

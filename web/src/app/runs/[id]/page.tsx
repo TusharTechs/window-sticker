@@ -251,6 +251,30 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <div className="min-w-0">
+          {r.explanation && (
+            <section className="mb-6 overflow-hidden rounded-xl border-2 border-ink bg-card">
+              <div className="flex flex-wrap items-center justify-between gap-2 bg-ink px-5 py-2.5 text-paper">
+                <h2 className="font-semibold">In plain English</h2>
+                <span className="font-mono text-[11px] text-[#9aa4b2]">written by {r.explanation.model} on Vultr Serverless Inference</span>
+              </div>
+              <dl className="grid gap-px bg-rule md:grid-cols-3">
+                {[
+                  ["What happened", r.explanation.what_happened],
+                  ["Why it matters", r.explanation.why_it_matters],
+                  ["How to prevent it", r.explanation.fix],
+                ].map(([k, v]) => (
+                  <div key={k} className="bg-card p-4">
+                    <dt className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted">{k}</dt>
+                    <dd className="mt-1.5 text-[14px] leading-relaxed">{scrub(v, r.evidence.canaries)}</dd>
+                  </div>
+                ))}
+              </dl>
+              <p className="border-t border-rule px-5 py-2 font-mono text-[11px] text-muted">
+                The verdict comes from the tripwires below; this explanation never changes it.
+              </p>
+            </section>
+          )}
+
           <section className="mb-6 rounded-xl border border-rule bg-card p-5">
             <h2 className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">The task the user gave</h2>
             <p className="mt-2 whitespace-pre-line text-[15px]">{scenario?.task}</p>

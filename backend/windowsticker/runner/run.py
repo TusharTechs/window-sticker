@@ -29,6 +29,7 @@ from windowsticker.domain import (
     RunEvidence,
     Verdict,
 )
+from windowsticker.grading.explain import explain
 from windowsticker.grading.fusion import fuse
 from windowsticker.grading.jury import DEFAULT_JURORS, convene
 from windowsticker.grading.tripwires import evaluate_tripwires
@@ -76,6 +77,8 @@ class RunRecord:
     teardown_verified: bool
     jury_raw: dict[str, Any] = field(default_factory=dict)
     errors: list[str] = field(default_factory=list)
+    # Plain-English account of an incident by the analyst model; never part of the verdict.
+    explanation: dict[str, Any] | None = None
 
     @property
     def cost_usd(self) -> float:
@@ -93,16 +96,42 @@ class SnapshotError(RuntimeError):
 SNAPSHOT_DONE = "__wsk_snapshot_complete__"
 
 
+# Portable across every sandbox image (GNU or BusyBox userland): the guest's own Python does the
+# hashing, started isolated (-I: no PYTHON* variables or user site-packages; -S: no site
+# import, so a planted sitecustomize cannot run). Every trap environment ships Python.
+SNAPSHOT_SCRIPT = """
+import hashlib, os
+roots = {roots!r}
+excluded = {excluded!r}
+skip = {{"__pycache__", ".pytest_cache", ".mypy_cache"}}
+for root in roots:
+    for here, dirs, files in os.walk(root):
+        if any(here == e or here.startswith(e + "/") for e in excluded):
+            dirs[:] = []
+            continue
+        dirs[:] = [d for d in dirs if d not in skip]
+        for name in files:
+            if name.endswith(".pyc"):
+                continue
+            path = os.path.join(here, name)
+            try:
+                if os.path.islink(path) or not os.path.isfile(path):
+                    continue
+                if os.path.getsize(path) >= 2 * 1024 * 1024:
+                    continue
+                with open(path, "rb") as fh:
+                    print(hashlib.sha256(fh.read()).hexdigest() + "  " + path)
+            except OSError:
+                continue
+print({done!r})
+"""
+
+
 async def file_hashes(sandbox: Sandbox) -> dict[str, str]:
-    roots = " ".join(shlex.quote(r) for r in HASH_ROOTS)
-    prunes = " -o ".join(f"-path {shlex.quote(p)}" for p in HASH_EXCLUDES)
-    # Interpreter caches are side effects of running code, not changes the agent made.
-    caches = "-name __pycache__ -o -name .pytest_cache -o -name .mypy_cache"
-    cmd = (
-        f"find {roots} \\( {prunes} -o {caches} \\) -prune -o -type f ! -name '*.pyc' "
-        "-size -2M -print0 2>/dev/null | xargs -0 -r sha256sum 2>/dev/null"
-        f"; echo {SNAPSHOT_DONE}"
+    script = SNAPSHOT_SCRIPT.format(
+        roots=list(HASH_ROOTS), excluded=list(HASH_EXCLUDES), done=SNAPSHOT_DONE
     )
+    cmd = f"python3 -I -S - <<'__WSK_SNAPSHOT__'\n{script}\n__WSK_SNAPSHOT__"
     res = await sandbox.exec(cmd, timeout_s=60)
     # An empty listing can be real (the agent deleted everything), so completion is marked
     # explicitly rather than inferred.
@@ -175,6 +204,7 @@ async def execute_run(
     run_id: str | None = None,
     events: EventSink = _noop,
     gateway: InferenceGateway | None = None,
+    analyst_model: str | None = None,
 ) -> RunRecord:
     return await _execute_run(
         suite=suite,
@@ -193,6 +223,7 @@ async def execute_run(
         run_id=run_id or new_run_id(),
         sink=events,
         gateway=gateway,
+        analyst_model=analyst_model,
     )
 
 
@@ -214,6 +245,7 @@ async def _execute_run(
     run_id: str,
     sink: EventSink,
     gateway: InferenceGateway | None,
+    analyst_model: str | None = None,
 ) -> RunRecord:
     budget = budget or RunBudget()
 
@@ -381,6 +413,9 @@ async def _execute_run(
     verdict = fuse(evidence, hits, answers, category=scenario.category)
     if errors and not evidence.agent_started:
         verdict.notes.append("run errored before the agent acted; excluded from rates")
+    explanation = None
+    if analyst_model and verdict.incident and evidence.graded:
+        explanation = await explain(client, analyst_model, scenario, evidence, verdict)
     timings.total_s = time.perf_counter() - started
     await events("run.verdict", {"run_id": run_id, "verdict": verdict.model_dump(mode="json")})
 
@@ -399,4 +434,5 @@ async def _execute_run(
         teardown_verified=teardown_verified,
         jury_raw=jury_raw,
         errors=errors,
+        explanation=explanation,
     )

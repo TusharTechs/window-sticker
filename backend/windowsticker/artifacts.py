@@ -30,6 +30,7 @@ def record_json(r: RunRecord) -> dict[str, Any]:
         "teardown_verified": r.teardown_verified,
         "jury_raw": r.jury_raw,
         "errors": r.errors,
+        "explanation": r.explanation,
     }
 
 

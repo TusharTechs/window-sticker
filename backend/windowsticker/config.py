@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     submit_token: SecretStr | None = Field(default=None, alias="WSK_SUBMIT_TOKEN")
     label_token: SecretStr | None = Field(default=None, alias="WSK_LABEL_TOKEN")
     max_runs_per_test: int = Field(default=240, alias="WSK_MAX_RUNS_PER_TEST")
+    # Public live demos per UTC day (each is 6 runs, about $0.05). 0 turns the demo off.
+    demo_daily_limit: int = Field(default=30, alias="WSK_DEMO_DAILY_LIMIT")
+    # The model that writes plain-English explanations of incidents ("" turns them off).
+    analyst_model: str = Field(default="deepseek-v4.1-flash-1017", alias="WSK_ANALYST_MODEL")
 
     # Price of the sandbox host, for all-in cost on stickers (VX1 2c/8g/120 GB, measured plan).
     host_hourly_usd: float = Field(default=0.076, alias="WSK_HOST_HOURLY_USD")

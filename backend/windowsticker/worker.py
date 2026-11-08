@@ -15,6 +15,7 @@ from typing import Any
 from windowsticker.agents.config import AgentConfig
 from windowsticker.config import Settings
 from windowsticker.db.session import Database
+from windowsticker.environments import DEFAULT_ENVIRONMENT, get_environment
 from windowsticker.inference.client import InferenceClient
 from windowsticker.runner.run import RunRecord
 from windowsticker.runner.test import CrashTest, run_crash_test
@@ -115,7 +116,13 @@ class Worker:
             runs=test.runs_requested,
             scenarios=list(test.scenarios) or None,
             sandbox_concurrency=min(test.concurrency, cap),
-            image=self.settings.sandbox_image,
+            # The default environment keeps the deployment's configured image; the others
+            # boot their own (Alpine, slim Debian, an older Python...).
+            image=(
+                self.settings.sandbox_image
+                if (test.environment or DEFAULT_ENVIRONMENT) == DEFAULT_ENVIRONMENT
+                else get_environment(test.environment).image
+            ),
             agent_image=self.settings.agent_image,
             cpus=self.settings.sandbox_cpus,
             memory_mib=self.settings.sandbox_memory_mib,
@@ -130,6 +137,7 @@ class Worker:
                 events=events,
                 on_record=on_record,
                 gateway=self.gateway,
+                analyst_model=self.settings.analyst_model or None,
             )
         except Exception as exc:
             log.exception("test %s failed", test.id)

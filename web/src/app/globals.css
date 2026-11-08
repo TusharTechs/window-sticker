@@ -127,10 +127,44 @@ body {
   animation: pulse-dot 1.2s ease-in-out infinite;
 }
 
+/* Moving hazard tape: the boundary of the lab. */
+@keyframes tape {
+  to {
+    background-position: 40px 0;
+  }
+}
+.hazard-tape {
+  background-image: repeating-linear-gradient(-45deg, var(--yellow) 0 14px, var(--ink) 14px 28px);
+  background-size: 40px 100%;
+  animation: tape 1.6s linear infinite;
+}
+
+/* Blueprint grid behind the dark lab sections, fading out at the edges. */
+.lab-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: radial-gradient(ellipse at 50% 40%, black 30%, transparent 78%);
+}
+
+/* Paper: a faint dot grid, like a test-track measurement sheet. */
+.paper-dots {
+  background-image: radial-gradient(rgba(20, 22, 26, 0.09) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* A soft yellow glow behind the hero sticker. */
+.sticker-glow {
+  background: radial-gradient(closest-side, rgba(255, 196, 0, 0.38), rgba(255, 196, 0, 0) 70%);
+  filter: blur(12px);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .tile-in,
   .verdict-flash,
-  .pulse-dot {
+  .pulse-dot,
+  .hazard-tape {
     animation: none;
   }
 }

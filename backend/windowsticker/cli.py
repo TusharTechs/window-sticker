@@ -135,6 +135,7 @@ def run(
                     warden=warden,
                     events=events,
                     gateway=gateway,
+                    analyst_model=settings.analyst_model or None,
                 )
             finally:
                 await gateway.stop()
@@ -391,6 +392,32 @@ def regrade(path: Path = typer.Argument(..., help="A test's artifact directory")
     )
 
 
+@app.command("explain-test")
+def explain_test_cmd(
+    test_ids: list[str] = typer.Argument(..., help="Test ids in the control-plane database"),
+) -> None:
+    """Write plain-English explanations for stored incidents (the verdicts are not changed)."""
+    from windowsticker.db.session import Database
+    from windowsticker.inference.client import InferenceClient
+    from windowsticker.service import explain_test
+
+    settings = get_settings()
+    if not settings.analyst_model:
+        raise typer.BadParameter("WSK_ANALYST_MODEL is empty")
+
+    async def main() -> None:
+        db = Database(settings.database_url)
+        async with InferenceClient(
+            settings.require_inference_key(), settings.vultr_inference_base_url
+        ) as client:
+            for test_id in test_ids:
+                n = await explain_test(db, client, settings.analyst_model, test_id)
+                console.print(f"{test_id}: {n} explanation(s) written")
+        await db.dispose()
+
+    asyncio.run(main())
+
+
 @app.command("regrade-test")
 def regrade_test_cmd(
     test_ids: list[str] = typer.Argument(..., help="Test ids in the control-plane database"),
@@ -488,6 +515,7 @@ def serve(host: str = "127.0.0.1", port: int = 8000) -> None:
         submit_token=secret(settings.submit_token),
         label_token=secret(settings.label_token),
         max_runs_per_test=settings.max_runs_per_test,
+        demo_daily_limit=settings.demo_daily_limit,
     )
     # Only trust X-Forwarded-* from the local reverse proxy (Caddy).
     uvicorn.run(api_app, host=host, port=port, proxy_headers=True, forwarded_allow_ips="127.0.0.1")

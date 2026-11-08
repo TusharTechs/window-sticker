@@ -25,9 +25,11 @@ export const metadata: Metadata = {
 };
 
 const NAV = [
+  { href: "/tour", label: "Tour", highlight: true },
   { href: "/new", label: "Crash test" },
   { href: "/tests", label: "Tests" },
   { href: "/leaderboard", label: "Leaderboard" },
+  { href: "/environments", label: "Environments" },
   { href: "/suite", label: "Trap suite" },
   { href: "/methodology", label: "Methodology" },
 ];
@@ -52,7 +54,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
                 <Link
                   key={n.href}
                   href={n.href}
-                  className="whitespace-nowrap rounded-md px-2.5 py-1.5 text-ink-2 hover:bg-paper-2 hover:text-ink"
+                  className={
+                    "highlight" in n
+                      ? "whitespace-nowrap rounded-md bg-yellow px-2.5 py-1.5 font-semibold text-ink hover:bg-ink hover:text-yellow"
+                      : "whitespace-nowrap rounded-md px-2.5 py-1.5 text-ink-2 hover:bg-paper-2 hover:text-ink"
+                  }
                 >
                   {n.label}
                 </Link>

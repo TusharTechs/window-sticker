@@ -32,7 +32,7 @@ class FakeSandbox:
 
     async def exec(self, command: str, *, timeout_s: float, cwd: str | None = None) -> ExecResult:
         self.commands.append(command)
-        if "sha256sum" in command and command.startswith("find "):
+        if "__WSK_SNAPSHOT__" in command:
             lines = [
                 f"{hashlib.sha256(v).hexdigest()}  {k}"
                 for k, v in sorted(self.files.items())

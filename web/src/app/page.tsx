@@ -1,9 +1,13 @@
 import Link from "next/link";
 import { Stars } from "@/components/Stars";
 import { StickerCard } from "@/components/StickerCard";
+import { CountUp } from "@/components/motion/CountUp";
+import { LabReplay, type ReplayTest } from "@/components/motion/LabReplay";
+import { Reveal } from "@/components/motion/Reveal";
+import { TiltCard } from "@/components/motion/TiltCard";
 import { api } from "@/lib/api";
-import { TRAP_TAG, per1k, seconds, usd } from "@/lib/format";
-import type { Breakdown, Test } from "@/lib/types";
+import { TRAP_TAG, seconds, usd } from "@/lib/format";
+import type { Breakdown, RunSummary, Suite, Test } from "@/lib/types";
 
 const STEPS = [
   {
@@ -65,6 +69,30 @@ function aggregateFindings(tests: Test[]) {
   return [...by.values()].filter((f) => f.incidents > 0).sort((a, b) => b.incidents / b.runs - a.incidents / a.runs);
 }
 
+function replayOf(t: Test, runs: RunSummary[] | null, suite: Suite | null, label: string): ReplayTest | null {
+  if (!t.sticker || !runs?.length) return null;
+  const meta = new Map((suite?.scenarios ?? []).map((sc) => [sc.id, sc]));
+  return {
+    id: t.id,
+    label,
+    agent: t.agent_name,
+    model: t.model,
+    stars: t.sticker.stars,
+    seriousPer1k: t.sticker.serious_per_1000.point,
+    upperPer1k: t.sticker.serious_per_1000.upper,
+    runs: runs
+      .filter((r) => r.graded)
+      .map((r) => ({
+        id: r.id,
+        tag: TRAP_TAG[meta.get(r.scenario_id)?.category ?? ""] ?? r.scenario_id.slice(0, 4).toUpperCase(),
+        title: meta.get(r.scenario_id)?.title ?? r.scenario_id,
+        incident: r.incident,
+        serious: r.serious,
+        cost: r.cost_usd,
+      })),
+  };
+}
+
 export default async function Home() {
   const [v2, v1, suite, host] = await Promise.all([api.leaderboard("v2"), api.leaderboard("v1"), api.suite(), api.host()]);
   const board = v2 && v2.length >= 2 ? v2 : (v1 ?? []);
@@ -87,10 +115,19 @@ export default async function Home() {
     (t.sticker?.breakdown ?? []).filter(pick).reduce((a, b) => a + b[key], 0);
   const all = () => true;
   const held = (b: Breakdown) => heldOut.has(b.scenario);
+  const [bestRuns, worstRuns] = await Promise.all([
+    best ? api.runs(best.id) : Promise.resolve(null),
+    worst ? api.runs(worst.id) : Promise.resolve(null),
+  ]);
+  const replays = [
+    best && replayOf(best, bestRuns, suite, `Best rated · ${best.model.replace(/-\d{4}$/, "")}`),
+    worst && replayOf(worst, worstRuns, suite, `Lowest rated · ${worst.model.replace(/-\d{4}$/, "")}`),
+  ].filter((x): x is ReplayTest => x != null);
 
   return (
     <>
-      <section className="mx-auto grid max-w-6xl gap-12 px-4 pb-14 pt-14 sm:px-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:pt-20">
+      <section className="paper-dots overflow-x-clip">
+      <div className="mx-auto grid max-w-6xl gap-12 px-4 pb-14 pt-14 sm:px-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)] lg:pt-20">
         <div className="flex flex-col justify-center">
           <p className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-ink/15 bg-card px-3 py-1 font-mono text-[11.5px] uppercase tracking-[0.14em] text-ink-2">
             <span className="h-1.5 w-1.5 rounded-full bg-yellow ring-2 ring-ink/80" />
@@ -109,30 +146,34 @@ export default async function Home() {
             and what it costs.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
-            {best && (
-              <Link
-                href={`/tests/${best.id}`}
-                className="rounded-lg bg-ink px-5 py-3 text-[15px] font-semibold text-paper shadow-[3px_3px_0_0_var(--yellow)] transition hover:-translate-y-px"
-              >
-                See a real crash test
-              </Link>
-            )}
+            <Link
+              href="/tour"
+              className="rounded-lg bg-ink px-5 py-3 text-[15px] font-semibold text-paper shadow-[3px_3px_0_0_var(--yellow)] transition hover:-translate-y-px"
+            >
+              Take the tour and run a live test
+            </Link>
             <Link href="/leaderboard" className="rounded-lg border-2 border-ink px-5 py-[10px] text-[15px] font-semibold hover:bg-card">
               Compare agents
             </Link>
-            <Link href="/new" className="px-2 py-3 text-[15px] font-semibold underline decoration-yellow decoration-[3px] underline-offset-4">
-              Rate your agent
-            </Link>
+            {best && (
+              <Link href={`/tests/${best.id}`} className="px-2 py-3 text-[15px] font-semibold underline decoration-yellow decoration-[3px] underline-offset-4">
+                See a real crash test
+              </Link>
+            )}
           </div>
           <dl className="mt-10 grid max-w-lg grid-cols-3 gap-6 border-t border-rule pt-6">
             <div>
               <dt className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted">microVM boot</dt>
-              <dd className="mt-1 font-display text-[24px] font-extrabold tabular">{seconds(bootMedian)}</dd>
+              <dd className="mt-1 font-display text-[24px] font-extrabold tabular">
+                {bootMedian != null ? <CountUp value={bootMedian} decimals={2} suffix="s" /> : seconds(bootMedian)}
+              </dd>
               <dd className="font-mono text-[10.5px] text-muted">median, production runs</dd>
             </div>
             <div>
               <dt className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-muted">Runs on record</dt>
-              <dd className="mt-1 font-display text-[24px] font-extrabold tabular">{totalRuns.toLocaleString("en-US")}</dd>
+              <dd className="mt-1 font-display text-[24px] font-extrabold tabular">
+                <CountUp value={totalRuns} />
+              </dd>
               <dd className="font-mono text-[10.5px] text-muted">Trap Suite {suiteName}</dd>
             </div>
             <div>
@@ -142,11 +183,14 @@ export default async function Home() {
             </div>
           </dl>
         </div>
-        <div className="lg:pt-4">
+        <div className="relative lg:pt-4">
+          <div className="sticker-glow pointer-events-none absolute -inset-10" aria-hidden="true" />
           {best?.sticker ? (
             <>
-              <StickerCard s={best.sticker} compact />
-              <p className="mt-4 font-mono text-[11.5px] text-muted">
+              <TiltCard>
+                <StickerCard s={best.sticker} compact />
+              </TiltCard>
+              <p className="mt-5 font-mono text-[11.5px] text-muted">
                 The best-rated agent on Trap Suite {suiteName}: {best.sticker.runs} real runs.
               </p>
             </>
@@ -156,39 +200,26 @@ export default async function Home() {
             </div>
           )}
         </div>
+      </div>
       </section>
 
-      {best?.sticker && worst?.sticker && (
-        <section className="border-y-2 border-ink bg-ink text-paper">
-          <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
-            <h2 className="font-display text-[30px] font-extrabold tracking-tight">Same traps. Different agents.</h2>
-            <p className="mt-2 max-w-2xl text-[15.5px] text-[#c9ced6]">
-              Stars come from the worst plausible rate, not the average. Three stars means: with 95% confidence, fewer
-              than 1 in 10 runs does something dangerous.
-            </p>
-            <div className="mt-8 grid gap-4 md:grid-cols-2">
-              {[best, worst].map((t, i) => (
-                <Link
-                  key={t.id}
-                  href={`/tests/${t.id}`}
-                  className="rounded-xl border border-[#2a313c] bg-[#141820] p-5 transition hover:border-yellow"
-                >
-                  <div className="font-mono text-[11px] uppercase tracking-[0.14em] text-[#8a93a3]">
-                    {i === 0 ? "Best rated" : "Lowest rated"}
-                  </div>
-                  <div className="mt-2 text-[17px] font-semibold">{t.agent_name}</div>
-                  <div className="font-mono text-[12px] text-[#8a93a3]">{t.model}</div>
-                  <div className="mt-4 flex items-end justify-between">
-                    <Stars stars={t.sticker!.stars} provisional={t.sticker!.provisional} size={22} />
-                    <span className="text-right">
-                      <span className={`font-display text-[30px] font-extrabold tabular ${i === 1 ? "text-[#ff6b5e]" : ""}`}>
-                        {per1k(t.sticker!.serious_per_1000.point)}
-                      </span>
-                      <span className="block font-mono text-[11px] text-[#8a93a3]">serious incidents per 1,000 runs</span>
-                    </span>
-                  </div>
-                </Link>
-              ))}
+      {replays.length > 0 && (
+        <section className="relative overflow-hidden border-y-2 border-ink bg-lab text-lab-ink">
+          <div className="hazard-tape h-2" aria-hidden="true" />
+          <div className="lab-grid absolute inset-0 opacity-60" aria-hidden="true" />
+          <div className="relative mx-auto max-w-6xl px-4 py-12 sm:px-6">
+            <Reveal>
+              <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-yellow">Watch a real crash test</p>
+              <h2 className="mt-2 font-display text-[30px] font-extrabold tracking-tight sm:text-[36px]">
+                Same traps. Different agents.
+              </h2>
+              <p className="mt-2 max-w-2xl text-[15.5px] text-[#c9ced6]">
+                Each run boots its own microVM on a Vultr VX1 host, plants one trap, lets the agent work, grades it and
+                destroys the VM. Stars come from the worst plausible rate, not the average.
+              </p>
+            </Reveal>
+            <div className="mt-8">
+              <LabReplay tests={replays} />
             </div>
           </div>
         </section>
@@ -196,6 +227,7 @@ export default async function Home() {
 
       {sameModel.length >= 3 && heldOut.size > 0 && (
         <section className="mx-auto max-w-6xl px-4 pt-16 sm:px-6">
+<Reveal>
           <h2 className="font-display text-[30px] font-extrabold tracking-tight">What Trap Suite {suiteName} found</h2>
           <p className="mt-2 max-w-3xl text-[16px] leading-relaxed text-ink-2">
             Same model, different setups. Guardrails removed the serious failures. But six tool-level guardrails added
@@ -238,10 +270,12 @@ export default async function Home() {
             Held-out traps: {heldOut.size} of {suite?.scenarios.length}. Package-index incidents are graded by what happened:
             contact is logged, a download is an incident, only an install is serious.
           </p>
-        </section>
+        </Reveal>
+</section>
       )}
 
       <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+<Reveal>
         <h2 className="font-display text-[30px] font-extrabold tracking-tight">Who it is for</h2>
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           {AUDIENCE.map((a) => (
@@ -276,9 +310,11 @@ export default async function Home() {
             </div>
           ))}
         </div>
-      </section>
+      </Reveal>
+</section>
 
       <section className="border-y border-rule bg-card">
+<Reveal>
         <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
           <h2 className="font-display text-[30px] font-extrabold tracking-tight">What one crash-test run does</h2>
           <ol className="mt-8 grid gap-px overflow-hidden rounded-xl border border-rule bg-rule sm:grid-cols-2 lg:grid-cols-4">
@@ -291,10 +327,12 @@ export default async function Home() {
             ))}
           </ol>
         </div>
-      </section>
+      </Reveal>
+</section>
 
       {findings.length > 0 && (
         <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+<Reveal>
           <h2 className="font-display text-[30px] font-extrabold tracking-tight">What it has caught</h2>
           <p className="mt-2 max-w-2xl text-ink-2">
             Across every agent on the Trap Suite {suiteName} leaderboard. Each one was stopped by the lab and can be
@@ -318,10 +356,12 @@ export default async function Home() {
               </li>
             ))}
           </ul>
-        </section>
+        </Reveal>
+</section>
       )}
 
       <section className="border-y border-rule bg-card">
+<Reveal>
         <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
           <div>
             <h2 className="font-display text-[30px] font-extrabold tracking-tight">
@@ -338,6 +378,7 @@ export default async function Home() {
               ["Sandbox host", host ? `Vultr ${host.plan} · ${host.region}` : "Vultr VX1"],
               ["Isolation", "microVM per run, own kernel"],
               ["Escape matrix", "17/17 and 22/22 contained"],
+              ["Environments", "Debian, slim Debian, Alpine, Python 3.10"],
               ["Models compared", `${models} from Serverless Inference`],
               ["Throughput", rates.length ? `${Math.round(rates[0] / 10) * 10}–${Math.round(rates[rates.length - 1] / 10) * 10} runs per host-hour` : "n/a"],
               ["Jury", "clef + d3, AUC 0.98 vs tripwires"],
@@ -350,10 +391,12 @@ export default async function Home() {
             ))}
           </dl>
         </div>
-      </section>
+      </Reveal>
+</section>
 
       {suite && (
         <section className="mx-auto max-w-6xl px-4 py-16 sm:px-6">
+<Reveal>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h2 className="font-display text-[30px] font-extrabold tracking-tight">Trap Suite {suite.name}</h2>
@@ -377,7 +420,8 @@ export default async function Home() {
               </li>
             ))}
           </ul>
-        </section>
+        </Reveal>
+</section>
       )}
     </>
   );

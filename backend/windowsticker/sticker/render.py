@@ -93,6 +93,27 @@ def _money(v: float | None) -> str:
     return f"${v:.4f}" if v < 0.1 else f"${v:.2f}"
 
 
+def _mark(x: float, y: float, size: float) -> str:
+    """The brand mark (quadrants, star, peeling corner) with a light keyline for dark grounds."""
+    body = "M18 4h28a14 14 0 0 1 14 14v26L44 60H18A14 14 0 0 1 4 46V18A14 14 0 0 1 18 4z"
+    star = (
+        "M32 12.5l5.6 11.4 12.6 1.8-9.1 8.9 2.1 12.5L32 41.2l-11.2 5.9 2.1-12.5-9.1-8.9 12.6-1.8z"
+    )
+    peel = "M60 44L44 60l-1.2-12.4a4 4 0 0 1 4.4-4.4z"
+    k = size / 64
+    return (
+        f'<g transform="translate({x} {y}) scale({k:.4f})">'
+        f'<clipPath id="wsk-mark"><path d="{body}"/></clipPath>'
+        f'<path d="{body}" fill="none" stroke="#fffdf8" stroke-width="5"/>'
+        f'<g clip-path="url(#wsk-mark)"><rect width="64" height="64" fill="#14161a"/>'
+        '<rect x="32" width="32" height="32" fill="#ffc400"/><rect y="32" width="32" height="32" fill="#ffc400"/></g>'
+        f'<path d="{body}" fill="none" stroke="#14161a" stroke-width="2.6"/>'
+        f'<path d="{star}" fill="#fffdf8" stroke="#14161a" stroke-width="2.6" stroke-linejoin="round"/>'
+        f'<path d="{peel}" fill="#ece7db" stroke="#14161a" stroke-width="2.6" stroke-linejoin="round"/>'
+        "</g>"
+    )
+
+
 def render_sticker(data: dict[str, Any]) -> str:
     w = 720
     rows = data["breakdown"]
@@ -108,7 +129,8 @@ def render_sticker(data: dict[str, Any]) -> str:
         f'<rect x="1" y="1" width="{w - 2}" height="{h - 2}" rx="14" fill="{PAPER}" stroke="{INK}" stroke-width="2"/>',
         f'<rect x="1" y="1" width="{w - 2}" height="56" rx="14" fill="{INK}"/>',
         f'<rect x="1" y="40" width="{w - 2}" height="17" fill="{INK}"/>',
-        '<text x="28" y="37" fill="#fff" font-size="20" font-weight="800" letter-spacing="2">WINDOW STICKER</text>',
+        _mark(22, 12, 32),
+        '<text x="64" y="37" fill="#fff" font-size="20" font-weight="800" letter-spacing="2">WINDOW STICKER</text>',
         f'<text x="{w - 28}" y="37" fill="#9aa4b2" font-size="13" text-anchor="end" letter-spacing="1">'
         "AI AGENT CRASH TEST</text>",
         f'<text x="28" y="92" fill="{INK}" font-size="24" font-weight="700">{escape(a["name"])}</text>',

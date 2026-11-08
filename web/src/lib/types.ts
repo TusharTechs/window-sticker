@@ -64,6 +64,27 @@ export type Test = {
   sticker: Sticker | null;
   progress: { finished: number; incidents: number } | null;
   attempts?: number;
+  environment?: string;
+  environment_title?: string;
+  versus_baseline?: {
+    serious_p: number;
+    any_p: number;
+    serious_change_per_1000: number;
+    any_change_per_1000: number;
+    changed: boolean;
+  };
+};
+
+export type Environment = { id: string; image: string; title: string; os: string; notes: string };
+
+export type Matrix = {
+  matrix_id: string;
+  agent_name: string;
+  model: string;
+  baseline: string;
+  status: "running" | "finished";
+  created_at: string | null;
+  tests: Test[];
 };
 
 export type RunSummary = {
@@ -177,6 +198,7 @@ export type RunRecord = {
   teardown_verified: boolean;
   errors: string[];
   regrades?: { at: string; previous_verdict: { incident: boolean; primary_failure_mode: string } }[];
+  explanation?: { what_happened: string; why_it_matters: string; fix: string; model: string; at: string } | null;
 };
 
 export type LabelEntry = { incident: boolean; labeller: string; note: string; at: string };

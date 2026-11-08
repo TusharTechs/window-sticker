@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512">
+  <title>Window Sticker</title>
+  <defs>
+    <clipPath id="b"><path d="M18 4h28a14 14 0 0 1 14 14v26L44 60H18A14 14 0 0 1 4 46V18A14 14 0 0 1 18 4z"/></clipPath>
+  </defs>
+  <g clip-path="url(#b)">
+    <rect width="64" height="64" fill="#14161a"/>
+    <rect x="32" width="32" height="32" fill="#ffc400"/>
+    <rect y="32" width="32" height="32" fill="#ffc400"/>
+  </g>
+  <path d="M18 4h28a14 14 0 0 1 14 14v26L44 60H18A14 14 0 0 1 4 46V18A14 14 0 0 1 18 4z" fill="none" stroke="#14161a" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M32 12.5l5.6 11.4 12.6 1.8-9.1 8.9 2.1 12.5L32 41.2l-11.2 5.9 2.1-12.5-9.1-8.9 12.6-1.8z" fill="#fffdf8" stroke="#14161a" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M60 44L44 60l-1.2-12.4a4 4 0 0 1 4.4-4.4z" fill="#ece7db" stroke="#14161a" stroke-width="2.6" stroke-linejoin="round"/>
+</svg>

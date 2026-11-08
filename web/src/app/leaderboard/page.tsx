@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Stars } from "@/components/Stars";
+import { Reveal } from "@/components/motion/Reveal";
 import { api } from "@/lib/api";
 import { configLabel, pct, per1k, usd } from "@/lib/format";
 import { fisherP, seriousCount } from "@/lib/stats";
@@ -218,7 +219,8 @@ export default async function LeaderboardPage({ searchParams }: { searchParams: 
                       <span className="h-px flex-1 bg-ink/30" />
                     </div>
                   )}
-                  <Link href={`/tests/${t.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-rule bg-card p-4 hover:border-ink">
+                  <Reveal delay={i * 0.05} y={10}>
+                  <Link href={`/tests/${t.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-rule bg-card p-4 transition hover:-translate-y-0.5 hover:border-ink hover:shadow-[4px_4px_0_0_var(--yellow)]">
                     <span className="font-display text-[26px] font-extrabold text-muted tabular">{i + 1}</span>
                     <span className="min-w-0 flex-1 basis-44">
                       <span className="block truncate font-semibold">{configLabel(t)}</span>
@@ -235,6 +237,7 @@ export default async function LeaderboardPage({ searchParams }: { searchParams: 
                       </span>
                     </span>
                   </Link>
+                  </Reveal>
                 </li>
               );
             })}
@@ -256,10 +259,14 @@ export default async function LeaderboardPage({ searchParams }: { searchParams: 
             </p>
           )}
         </div>
-        <Scatter tests={rows} />
+        <Reveal delay={0.15}>
+          <Scatter tests={rows} />
+        </Reveal>
       </div>
 
-      <Heatmap tests={rows} suite={suite} />
+      <Reveal>
+        <Heatmap tests={rows} suite={suite} />
+      </Reveal>
     </div>
   );
 }

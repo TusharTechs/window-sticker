@@ -272,3 +272,88 @@ async def test_leaderboard_keeps_the_first_result_when_a_configuration_is_rerun(
     with TestClient(app) as http:
         board = http.get("/api/leaderboard?suite=v2").json()
     assert [(t["id"], t["attempts"]) for t in board] == [("test_first", 2)]
+
+
+async def test_live_demo_is_public_bounded_and_off_the_leaderboard(db):
+    app = create_app(db, admin_token=TOKEN, demo_daily_limit=3, demo_cooldown_s=600)
+    with TestClient(app) as http:  # no token
+        info = http.get("/api/demo").json()
+        assert info["enabled"] and info["runs"] == 6 and info["remaining_today"] == 3
+        assert http.post("/api/demo", json={"model": "gpt-unknown"}).status_code == 422
+        a = http.post(
+            "/api/demo",
+            json={"model": "qwen3.8-flash-next", "profile": "hardened"},
+            headers={"x-forwarded-for": "1.1.1.1"},
+        )
+        assert a.status_code == 201, a.text
+        t = a.json()
+        assert t["internal"] and t["runs_requested"] == 6 and len(t["scenarios"]) == 3
+        assert t["guardrails"]  # the hardened profile
+        # Same visitor again: cooldown.
+        again = http.post("/api/demo", json={}, headers={"x-forwarded-for": "1.1.1.1"})
+        assert again.status_code == 429
+        # A second visitor may start one; a third finds two already in flight.
+        assert (
+            http.post("/api/demo", json={}, headers={"x-forwarded-for": "2.2.2.2"}).status_code
+            == 201
+        )
+        busy = http.post("/api/demo", json={}, headers={"x-forwarded-for": "3.3.3.3"})
+        assert busy.status_code == 409 and len(busy.json()["detail"]["active"]) == 2
+        assert http.get("/api/demo").json()["remaining_today"] == 1
+        # Demos never appear in public listings or on the leaderboard.
+        assert all(x["label"] != "Live demo" for x in http.get("/api/tests").json())
+        assert http.get("/api/leaderboard?suite=v2").json() == []
+
+
+async def test_environment_matrix_runs_each_environment_and_compares_to_baseline(db):
+    app = create_app(db, admin_token=TOKEN)
+    with TestClient(app, headers=AUTH) as http:
+        envs = {e["id"]: e for e in http.get("/api/environments").json()}
+        assert {"debian", "alpine", "debian-slim", "debian11-py310"} <= set(envs)
+        assert envs["alpine"]["image"].endswith("alpine")
+        bad = http.post(
+            "/api/matrix",
+            json={
+                "agent": {"name": "M", "model": "deepseek-v4.1-flash-1017"},
+                "environments": ["debian", "mars"],
+            },
+        )
+        assert bad.status_code == 422
+        made = http.post(
+            "/api/matrix",
+            json={
+                "agent": {"name": "M", "model": "deepseek-v4.1-flash-1017"},
+                "environments": ["debian", "alpine"],
+                "runs": 2,
+                "scenarios": ["readme-exfil"],
+                "concurrency": 1,
+            },
+        ).json()
+        mid = made["matrix_id"]
+        assert [t["environment"] for t in made["tests"]] == ["debian", "alpine"]
+
+        script = ScriptedInference(
+            turns(4), {"clef": systemone_reply(0.9), "d3": systemone_reply(0.9)}
+        )
+        images = []
+
+        class Recording(FakeDriver):
+            async def create(self, spec):
+                images.append(spec.image)
+                return await super().create(spec)
+
+        async with InferenceClient("k", transport=script.transport()) as client:
+            w = Worker(
+                db, Settings(), Recording(), client, EgressWarden(bind_host="127.0.0.1"), name="w1"
+            )
+            while await w.run_once():
+                pass
+        assert "python:3.12-alpine" in images  # the alpine test booted the alpine image
+
+        m = http.get(f"/api/matrix/{mid}").json()
+        assert m["status"] == "finished" and m["baseline"] == "debian"
+        alpine = next(t for t in m["tests"] if t["environment"] == "alpine")
+        assert "versus_baseline" in alpine and alpine["environment_title"] == "Alpine Linux"
+        assert any(x["matrix_id"] == mid for x in http.get("/api/matrices").json())
+        # Cross-environment tests stay off the leaderboard.
+        assert http.get("/api/leaderboard?suite=v2").json() == []

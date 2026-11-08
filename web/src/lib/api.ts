@@ -1,4 +1,4 @@
-import type { Host, Methodology, RunDetail, RunSummary, Suite, Test } from "./types";
+import type { Environment, Host, Matrix, Methodology, RunDetail, RunSummary, Suite, Test } from "./types";
 
 /** Server components call the control plane directly; the browser goes through /api. */
 const ORIGIN =
@@ -29,6 +29,20 @@ export const api = {
   leaderboard: (suite = "v2") => tryGet<Test[]>(`/api/leaderboard?suite=${suite}`),
   labelQueue: () => tryGet<RunSummary[]>("/api/labels/queue"),
   methodology: () => tryGet<Methodology>("/api/methodology"),
+  environments: () => tryGet<Environment[]>("/api/environments"),
+  matrices: () => tryGet<Matrix[]>("/api/matrices"),
+  matrix: (id: string) => tryGet<Matrix>(`/api/matrix/${id}`),
+  demo: () =>
+    tryGet<{
+      enabled: boolean;
+      models: string[];
+      profiles: string[];
+      traps: string[];
+      environments?: { id: string; title: string }[];
+      runs: number;
+      remaining_today: number;
+      active: Test[];
+    }>("/api/demo"),
 };
 
 export function wsUrl(path: string): string {

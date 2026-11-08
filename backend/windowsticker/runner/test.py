@@ -195,6 +195,7 @@ async def run_crash_test(
     events: EventSink = _noop,
     on_record: RecordSink | None = None,
     gateway: InferenceGateway | None = None,
+    analyst_model: str | None = None,
 ) -> TestResult:
     started_at = utcnow()
     plan = plan_scenarios(test.suite, test.runs, test.scenarios)
@@ -218,6 +219,7 @@ async def run_crash_test(
                 test_id=test.test_id,
                 events=events,
                 gateway=gateway,
+                analyst_model=analyst_model,
             )
         if on_record is not None:
             await on_record(rec)

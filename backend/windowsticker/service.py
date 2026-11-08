@@ -14,7 +14,8 @@ from windowsticker.agents.config import AgentConfig
 from windowsticker.artifacts import record_json
 from windowsticker.db.models import LabelRow, RunRow, TestRow
 from windowsticker.db.session import Database
-from windowsticker.domain import JuryAnswer, RunEvidence, utcnow
+from windowsticker.domain import JuryAnswer, RunEvidence, Verdict, utcnow
+from windowsticker.environments import DEFAULT_ENVIRONMENT, get_environment
 from windowsticker.grading.fusion import fuse, is_serious
 from windowsticker.grading.tripwires import evaluate_tripwires
 from windowsticker.runner.run import RunRecord
@@ -39,7 +40,9 @@ async def create_test(
     concurrency: int = 8,
     label: str = "",
     precomputed: bool = False,
+    environment: str = DEFAULT_ENVIRONMENT,
 ) -> TestRow:
+    get_environment(environment)  # raises KeyError for an unknown environment
     if not 1 <= runs <= MAX_RUNS_PER_TEST:
         raise ValueError(f"runs must be between 1 and {MAX_RUNS_PER_TEST}")
     trap_suite = load_suite(suite)
@@ -59,6 +62,7 @@ async def create_test(
         concurrency=max(1, min(concurrency, 16)),
         label=label,
         precomputed=precomputed,
+        environment=environment,
     )
     async with db.session() as s:
         s.add(row)
@@ -212,6 +216,43 @@ async def regrade_test(db: Database, test_id: str) -> list[tuple[str, str, bool,
     return changes
 
 
+async def explain_test(db: Database, client: Any, model: str, test_id: str) -> int:
+    """Write plain-English explanations for a stored test's incidents that do not have one.
+
+    Uses each run's stored evidence and verdict; the verdict itself is never touched.
+    Returns how many explanations were written."""
+    from windowsticker.grading.explain import explain
+
+    written = 0
+    async with db.session() as s:
+        test = await s.get(TestRow, test_id)
+        if test is None:
+            raise KeyError(test_id)
+        suite = load_suite(test.suite)
+        rows = (
+            (
+                await s.execute(
+                    select(RunRow).where(RunRow.test_id == test_id, RunRow.incident.is_(True))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        for row in rows:
+            rec = dict(row.record)
+            if rec.get("explanation"):
+                continue
+            evidence = RunEvidence.model_validate(rec["evidence"])
+            verdict = Verdict.model_validate(rec["verdict"])
+            note = await explain(client, model, suite.get(row.scenario_id), evidence, verdict)
+            if note is not None:
+                rec["explanation"] = note
+                row.record = rec
+                written += 1
+        await s.commit()
+    return written
+
+
 def all_in_cost(test: TestRow, inference_usd: float) -> dict[str, Any]:
     """Inference plus the VX1 host time the test occupied (the whole host, conservatively).
 
@@ -230,7 +271,7 @@ def all_in_cost(test: TestRow, inference_usd: float) -> dict[str, Any]:
     }
 
 
-INTERNAL_MARKERS = ("smoke", "calibration", "local microvms", "ci check", "ci demo")
+INTERNAL_MARKERS = ("smoke", "calibration", "local microvms", "ci check", "ci demo", "live demo")
 
 
 def is_internal(t: TestRow) -> bool:

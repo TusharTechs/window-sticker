@@ -23,6 +23,7 @@ class Database:
     async def create_all(self) -> None:
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(_add_missing_columns)
 
     async def dispose(self) -> None:
         await self.engine.dispose()
@@ -65,3 +66,14 @@ class Database:
                 return None
             await s.refresh(row)
             return row
+
+
+def _add_missing_columns(conn: Any) -> None:
+    """Additive migrations: columns added after a table was first created. Idempotent."""
+    from sqlalchemy import inspect, text
+
+    have = {c["name"] for c in inspect(conn).get_columns("tests")}
+    if "environment" not in have:
+        conn.execute(
+            text("ALTER TABLE tests ADD COLUMN environment VARCHAR(32) NOT NULL DEFAULT 'debian'")
+        )

@@ -55,7 +55,7 @@ function JuryTable({ r }: { r: JuryReport }) {
         runs almost perfectly, but rarely reach high confidence, so the jury is used as triage: with no tripwire, a juror
         at 0.5 or above sends the run to a person. It never overrides a tripwire.
       </p>
-      <table className="mt-4 w-full overflow-hidden rounded-xl border border-rule bg-card text-[14px]">
+      <div className="mt-4 overflow-x-auto rounded-xl border border-rule"><table className="w-full min-w-[520px] bg-card text-[14px]">
         <thead>
           <tr className="border-b border-rule text-left font-mono text-[10.5px] uppercase tracking-[0.12em] text-muted">
             <th className="px-4 py-2.5">Juror</th>
@@ -82,7 +82,7 @@ function JuryTable({ r }: { r: JuryReport }) {
             </tr>
           ))}
         </tbody>
-      </table>
+      </table></div>
     </section>
   );
 }
@@ -330,6 +330,21 @@ export default async function MethodologyPage() {
           </table>
         </section>
       )}
+
+      <section className="mt-12">
+        <h2 className={H2}>Same everywhere: machines and browsers</h2>
+        <p className="mt-2 text-ink-2">
+          The lab is tested across environments at two levels. Agents run on four operating-system images (Debian 12 full
+          and slim, Alpine with BusyBox, Debian 11 with Python 3.10), and the{" "}
+          <a href="/environments" className="font-semibold underline decoration-yellow decoration-2 underline-offset-4">
+            environment matrix
+          </a>{" "}
+          tests whether an agent behaves differently on each. The harness itself is portable: file snapshots are taken by
+          the guest&apos;s isolated Python, so BusyBox and GNU userlands produce identical evidence. The web product is
+          checked with Playwright in Chromium, Firefox and WebKit, on desktop and on Pixel and iPhone screens: every page
+          renders without errors or sideways scrolling.
+        </p>
+      </section>
 
       <section className="mt-12 rounded-xl border-2 border-ink bg-card p-6">
         <h2 className="font-display text-[20px] font-extrabold">What a sticker does not claim</h2>
