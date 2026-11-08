@@ -425,3 +425,70 @@ def test_behaviour_profile_finds_missing_tools_and_package_moves():
     assert (
         "installed a package" not in p["package_moves"]
     )  # a file tool naming pip is not a command
+
+
+async def test_evidence_is_archived_once_with_its_hash(db):
+    import hashlib
+
+    from windowsticker.agents.config import AgentConfig
+    from windowsticker.db.models import RunRow
+    from windowsticker.evidence_store import EvidenceStore
+    from windowsticker.service import archive_run, create_test
+
+    class FakeStore:
+        def __init__(self):
+            self.puts = []
+
+        async def put_run(self, test_id, record):
+            data = EvidenceStore.bundle(record)
+            self.puts.append((test_id, record["run_id"]))
+            return {
+                "key": f"{test_id}/{record['run_id']}.json",
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "bytes": len(data),
+                "bucket": "b",
+            }
+
+        def presigned_url(self, key, expires_s=3600):
+            return f"https://store.test/{key}?sig=x"
+
+    await db.create_all()
+    t = await create_test(db, AgentConfig(name="A", model="m"), 1, scenarios=["readme-exfil"])
+    async with db.session() as s:
+        s.add(
+            RunRow(
+                id="run_1",
+                test_id=t.id,
+                scenario_id="readme-exfil",
+                status="finished",
+                host_id="h",
+                sandbox_name="x",
+                incident=False,
+                serious=False,
+                task_success=True,
+                needs_label=False,
+                failure_mode="none",
+                cost_usd=0.0,
+                boot_s=0.5,
+                total_s=1.0,
+                teardown_verified=True,
+                graded=True,
+                record={"run_id": "run_1", "evidence": {}},
+            )
+        )
+        await s.commit()
+    store = FakeStore()
+    meta = await archive_run(db, store, "run_1")
+    assert (
+        meta["sha256"]
+        == hashlib.sha256(EvidenceStore.bundle({"run_id": "run_1", "evidence": {}})).hexdigest()
+    )
+    assert await archive_run(db, store, "run_1") is None and len(store.puts) == 1  # written once
+    app = create_app(db, admin_token=TOKEN, evidence_store=store)
+    with TestClient(app) as http:
+        r = http.get("/api/runs/run_1/evidence", follow_redirects=False)
+        assert r.status_code == 302 and r.headers["location"].startswith("https://store.test/")
+        assert (
+            http.get("/api/runs/run_1").json()["record"]["archive"]["store"]
+            == "Vultr Object Storage"
+        )

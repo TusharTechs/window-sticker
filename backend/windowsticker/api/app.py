@@ -24,7 +24,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
 
@@ -40,6 +40,8 @@ from windowsticker.stats.ab import compare_rates
 from windowsticker.stats.rating import MIN_TRIALS_FOR_RATING, THRESHOLDS, runs_needed_for
 from windowsticker.sticker.render import render_badge, render_sticker, sticker_data
 from windowsticker.traps.loader import load_suite
+from windowsticker.traps.standards import CATEGORY_OWASP, OWASP_LLM_2025, owasp_for
+from windowsticker.traps.variants import is_private as is_private_suite
 
 SVG = "image/svg+xml"
 
@@ -176,6 +178,7 @@ def create_app(
     cors_origins: list[str] | None = None,
     demo_daily_limit: int = 30,
     demo_cooldown_s: float = 600.0,
+    evidence_store: Any = None,
 ) -> FastAPI:
     """Build the API. Reads are public. Writes need a bearer token, scoped by action:
     ``submit_token`` may start tests, ``label_token`` may label runs, ``admin_token`` may do
@@ -251,9 +254,12 @@ def create_app(
             s = load_suite(name)
         except FileNotFoundError as exc:
             raise HTTPException(404, "suite not found") from exc
+        private = is_private_suite(name)
         return {
             "name": s.name,
             "digest": s.digest,
+            # A private variant's wording is the secret: only titles and categories are served.
+            "private": private,
             "scenarios": [
                 {
                     "id": sc.id,
@@ -261,9 +267,14 @@ def create_app(
                     "category": sc.category.value,
                     "severity": sc.severity.value,
                     "summary": sc.summary,
-                    "task": sc.task,
-                    "tripwires": [t.model_dump(mode="json") for t in sc.tripwires],
+                    "task": "(private variant: the wording is not published)"
+                    if private
+                    else sc.task,
+                    "tripwires": []
+                    if private
+                    else [t.model_dump(mode="json") for t in sc.tripwires],
                     "tags": sc.tags,
+                    "owasp": owasp_for(sc.category.value),
                 }
                 for sc in s.scenarios
             ],
@@ -305,6 +316,15 @@ def create_app(
             raise HTTPException(404, "no escape matrix for that profile and environment")
         data: dict[str, Any] = json.loads(path.read_text())
         return data
+
+    @app.get("/api/standards")
+    async def standards() -> dict[str, Any]:
+        """The OWASP Top 10 for LLM Applications (2025) and which trap categories measure each."""
+        return {
+            "name": "OWASP Top 10 for LLM Applications 2025",
+            "risks": [{"id": k, "name": v} for k, v in OWASP_LLM_2025.items()],
+            "categories": {k: list(v) for k, v in CATEGORY_OWASP.items()},
+        }
 
     @app.get("/api/methodology")
     async def methodology() -> dict[str, Any]:
@@ -748,6 +768,18 @@ def create_app(
             for lab in labels
         ]
         return out
+
+    @app.get("/api/runs/{run_id}/evidence")
+    async def run_evidence(run_id: str) -> Any:
+        """The archived evidence bundle in Vultr Object Storage (a short-lived download link)."""
+        async with db.session() as s:
+            r = await s.get(RunRow, run_id)
+        if r is None:
+            raise HTTPException(404, "run not found")
+        archive = (r.record or {}).get("archive")
+        if not archive or evidence_store is None:
+            raise HTTPException(404, "this run's evidence is not archived")
+        return RedirectResponse(evidence_store.presigned_url(archive["key"]), status_code=302)
 
     @app.get("/api/labels/queue")
     async def label_queue(limit: int = Query(50, le=200)) -> list[dict[str, Any]]:

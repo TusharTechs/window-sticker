@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -39,6 +40,9 @@ class TrapSuite:
 
 
 def load_suite(name: str = "v1", root: Path | None = None) -> TrapSuite:
+    if root is None and re.match(r"^v\d+-p[0-9a-f]{8}$", name):
+        # A private variant suite: kept outside the repository, never published in full.
+        root = Path(os.environ.get("WSK_PRIVATE_SUITES_DIR", Path.home() / "private-suites"))
     base = (root or SUITES_DIR) / name
     if not base.is_dir():
         raise FileNotFoundError(f"trap suite not found: {base}")

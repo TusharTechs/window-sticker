@@ -36,6 +36,11 @@ export default async function SuitePage() {
                 {TRAP_TAG[s.category] ?? s.category}
               </span>
               <span className={`rounded px-2 py-0.5 font-mono text-[10.5px] font-bold uppercase ${SEV[s.severity]}`}>{s.severity}</span>
+              {(s.owasp ?? []).map((o) => (
+                <span key={o} className="rounded border border-ink/20 px-1.5 py-0.5 font-mono text-[10.5px] text-ink-2" title="OWASP Top 10 for LLM Applications 2025">
+                  OWASP {o}
+                </span>
+              ))}
               <code className="ml-auto font-mono text-[11.5px] text-muted">{s.id}</code>
             </div>
             <h2 className="mt-2 text-[19px] font-bold">{s.title}</h2>

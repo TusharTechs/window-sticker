@@ -16,6 +16,7 @@ dependencies = [
   "rich>=13.7",
   "sqlalchemy[asyncio]>=2.0.30",
   "asyncpg>=0.29",
+  "boto3>=1.43.126",
 ]
 
 [project.optional-dependencies]
@@ -33,6 +34,7 @@ dev = [
   "ruff>=0.6",
   "mypy>=1.11",
   "types-PyYAML",
+  "boto3-stubs[s3]>=1.43.126",
 ]
 
 [build-system]

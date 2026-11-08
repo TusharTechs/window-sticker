@@ -48,6 +48,28 @@ def suite_list(name: str = "v1") -> None:
     console.print(table)
 
 
+@suite_app.command("vary")
+def suite_vary(base: str = "v2") -> None:
+    """Write a private, reworded variant of a suite (outside the repo) for unseen-trap ratings."""
+    from windowsticker.inference.client import InferenceClient
+    from windowsticker.traps.variants import make_variant
+
+    settings = get_settings()
+
+    async def main() -> None:
+        async with InferenceClient(
+            settings.require_inference_key(), settings.vultr_inference_base_url
+        ) as client:
+            name, report = await make_variant(
+                client, settings.analyst_model or "deepseek-v4.1-flash-1017", base
+            )
+        changed = sum(1 for v in report["scenarios"].values() if v)
+        files = sum(len(v) for v in report["scenarios"].values())
+        console.print(f"{name}: {changed}/{len(report['scenarios'])} traps reworded, {files} texts")
+
+    asyncio.run(main())
+
+
 @suite_app.command("validate")
 def suite_validate(name: str = "v1") -> None:
     suite = load_suite(name)
@@ -419,6 +441,45 @@ def explain_test_cmd(
     asyncio.run(main())
 
 
+@app.command("archive-evidence")
+def archive_evidence_cmd(
+    test_ids: list[str] = typer.Argument(None, help="Test ids (default: every finished test)"),
+) -> None:
+    """Copy stored runs' evidence to Vultr Object Storage, keeping each bundle's SHA-256."""
+    from sqlalchemy import select
+
+    from windowsticker.db.models import RunRow, TestRow
+    from windowsticker.db.session import Database
+    from windowsticker.service import archive_run
+
+    settings = get_settings()
+    store = settings.evidence_store()
+    if store is None:
+        raise typer.BadParameter("Object Storage is not configured (WSK_S3_*)")
+
+    async def main() -> None:
+        db = Database(settings.database_url)
+        async with db.session() as s:
+            ids = test_ids or [
+                t.id
+                for t in (
+                    await s.execute(select(TestRow).where(TestRow.status == "finished"))
+                ).scalars()
+            ]
+            runs = [
+                r.id
+                for r in (await s.execute(select(RunRow).where(RunRow.test_id.in_(ids)))).scalars()
+            ]
+        done = 0
+        for run_id in runs:
+            if await archive_run(db, store, run_id):
+                done += 1
+        await db.dispose()
+        console.print(f"archived {done} of {len(runs)} runs")
+
+    asyncio.run(main())
+
+
 @app.command("regrade-test")
 def regrade_test_cmd(
     test_ids: list[str] = typer.Argument(..., help="Test ids in the control-plane database"),
@@ -517,6 +578,7 @@ def serve(host: str = "127.0.0.1", port: int = 8000) -> None:
         label_token=secret(settings.label_token),
         max_runs_per_test=settings.max_runs_per_test,
         demo_daily_limit=settings.demo_daily_limit,
+        evidence_store=settings.evidence_store(),
     )
     # Only trust X-Forwarded-* from the local reverse proxy (Caddy).
     uvicorn.run(api_app, host=host, port=port, proxy_headers=True, forwarded_allow_ips="127.0.0.1")

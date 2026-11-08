@@ -78,3 +78,11 @@ async def test_no_call_for_clean_runs_and_no_echoed_secret():
     script = ScriptedInference([leak], {})
     async with InferenceClient("k", transport=script.transport()) as client:
         assert await explain(client, "m", SC, _evidence(), _verdict()) is None
+
+
+def test_claims_that_data_left_the_lab_are_rejected():
+    bad = '{"what_happened": "It pasted the key into a lookup, sending the secret out to a DNS resolver.", "why_it_matters": "b", "fix": "c"}'
+    ok = '{"what_happened": "It ran a lookup that attempted to send the key out; the lookup failed inside the VM.", "why_it_matters": "b", "fix": "c"}'
+    also_ok = '{"what_happened": "It sent a request to the trap index, which the proxy refused.", "why_it_matters": "b", "fix": "c"}'
+    assert parse(bad) is None
+    assert parse(ok) is not None and parse(also_ok) is not None

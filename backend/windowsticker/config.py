@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -42,6 +43,11 @@ class Settings(BaseSettings):
     max_runs_per_test: int = Field(default=240, alias="WSK_MAX_RUNS_PER_TEST")
     # Public live demos per UTC day (each is 6 runs, about $0.05). 0 turns the demo off.
     demo_daily_limit: int = Field(default=30, alias="WSK_DEMO_DAILY_LIMIT")
+    # Vultr Object Storage (S3-compatible) for archived run evidence; empty disables it.
+    s3_endpoint: str = Field(default="", alias="WSK_S3_ENDPOINT")
+    s3_access_key: SecretStr | None = Field(default=None, alias="WSK_S3_ACCESS_KEY")
+    s3_secret_key: SecretStr | None = Field(default=None, alias="WSK_S3_SECRET_KEY")
+    s3_bucket: str = Field(default="wsk-evidence", alias="WSK_S3_BUCKET")
     # The model that writes plain-English explanations of incidents ("" turns them off).
     analyst_model: str = Field(default="deepseek-v4.1-flash-1017", alias="WSK_ANALYST_MODEL")
 
@@ -56,6 +62,19 @@ class Settings(BaseSettings):
     run_token_budget: int = 60_000
     sandbox_cpus: int = 1
     sandbox_memory_mib: int = 1024
+
+    def evidence_store(self) -> Any:
+        """The Object Storage evidence archive, or None when it is not configured."""
+        if not (self.s3_endpoint and self.s3_access_key and self.s3_secret_key):
+            return None
+        from windowsticker.evidence_store import EvidenceStore
+
+        return EvidenceStore(
+            self.s3_endpoint,
+            self.s3_access_key.get_secret_value(),
+            self.s3_secret_key.get_secret_value(),
+            self.s3_bucket,
+        )
 
     def require_inference_key(self) -> str:
         if self.vultr_inference_api_key is None:

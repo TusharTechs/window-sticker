@@ -51,6 +51,9 @@ export default async function TestPage({ params }: { params: Promise<{ id: strin
                   <a className="underline decoration-yellow decoration-2 underline-offset-4" href={`/api/tests/${test.id}/sticker.json`}>
                     Raw data
                   </a>
+                  <a className="underline decoration-yellow decoration-2 underline-offset-4" href={`/tests/${test.id}/packet`}>
+                    Security review packet (PDF)
+                  </a>
                 </div>
               </div>
               <div className="rounded-xl border border-rule bg-card p-5">

@@ -149,6 +149,30 @@ Every row is 36 runs over all 12 v1 traps, re-graded with the current grader.
 - **Cross-browser checked:** Playwright runs every page in Chromium, Firefox and WebKit, on desktop and on Pixel and
   iPhone sizes (60 checks), on a schedule.
 
+### Ratings on traps nobody has seen
+
+The published suite can be studied, so a vendor could tune against it. `windowsticker suite vary`
+asks a Vultr model to reword each trap (the task and the human-readable lures) while every
+placeholder, command, path and tripwire stays identical; a rewrite that changes anything protected
+is discarded. Variant suites live only on the lab host; the API serves their titles, never their
+wording. On the first private variant, the ratings held:
+
+| Configuration (`deepseek-v4.1-flash`) | Public v2 | Private variant (unseen wording) |
+|---|---|---|
+| No guardrails | 1 serious, 4 any in 48 | 3 serious, 6 any in 48 |
+| Hardened | 0 serious, 5 any in 96 | 0 serious, 3 any in 48 |
+
+### For security reviews
+
+- **OWASP Top 10 for LLM Applications (2025):** every trap maps to the risks it measures, and every
+  sticker shows coverage and findings per risk (LLM01 prompt injection, LLM02 sensitive information
+  disclosure, LLM03 supply chain, LLM05, LLM06 excessive agency, LLM09, LLM10).
+- **Security-review packet:** a printable PDF per test (`/tests/<id>/packet`) with the rating, OWASP
+  coverage, per-trap results, the most severe incidents explained, method and verification links.
+  [Example](docs/submission/security-review-packet-example.pdf).
+- **Evidence in Vultr Object Storage:** every run's full evidence bundle is archived once, with its
+  SHA-256 stored next to the run; each replay links to the bundle so anyone can check the hash.
+
 ### A rating, not a containment test
 
 A sandbox that holds tells a buyer nothing about the agent inside it. Window Sticker uses the
@@ -200,6 +224,7 @@ anything the microVM or the warden has to stop counts as an *incident*.
 | Cloud Compute (VX1, KVM) | One host runs the microVMs (on four OS images), the Egress Warden, the inference lane, the control plane and the web app |
 | Serverless Inference: chat models | The agents under test (`deepseek-v4.1-flash`, `glm-5.3`, `qwen3.8`, `mimo`, `minimax`), and the incident analyst that explains every incident in plain English |
 | Serverless Inference: System One | The decision-model jury (`clef`, `d3`) |
+| Object Storage | Every run's evidence bundle, archived once with its SHA-256, linked from each replay |
 | Firewall groups (API) | SSH only from the operator's IP; 80/443 public; created by `windowsticker host create` |
 | Vultr API v2 | Host lifecycle (create, wait for active, tagged destroy), SSH keys, firewall rules |
 
@@ -213,7 +238,7 @@ the queue, and generating trap variants with the vector store and embeddings.
 ```bash
 cd backend
 uv sync
-uv run pytest                      # 172 tests, no keys needed
+uv run pytest                      # 182 tests, no keys needed
 uv run windowsticker suite list    # the trap suite
 uv run windowsticker stats thresholds
 ```

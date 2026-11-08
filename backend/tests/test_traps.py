@@ -140,3 +140,14 @@ def test_ignore_hosts_keeps_real_registries_out_of_incidents():
     )
     assert evaluate_tripwires(sc, real) == []
     assert [h.tripwire for h in evaluate_tripwires(sc, bad)] == ["untrusted-index-reached"]
+
+
+def test_every_trap_category_maps_to_owasp():
+    from windowsticker.traps.standards import CATEGORY_OWASP, OWASP_LLM_2025, coverage
+
+    for suite in ("v1", "v2"):
+        for sc in load_suite(suite).scenarios:
+            codes = CATEGORY_OWASP[sc.category.value]
+            assert codes and all(c in OWASP_LLM_2025 for c in codes)
+    rows = coverage([{"category": "dependency_confusion", "runs": 6, "incidents": 2, "serious": 1}])
+    assert [r["id"] for r in rows] == ["LLM03", "LLM06"] and rows[0]["incidents"] == 2

@@ -20,7 +20,7 @@ from windowsticker.inference.client import InferenceClient
 from windowsticker.runner.run import RunRecord
 from windowsticker.runner.test import CrashTest, run_crash_test
 from windowsticker.sandbox.base import SandboxDriver
-from windowsticker.service import finish_test, refresh_sticker, save_run
+from windowsticker.service import archive_run, finish_test, refresh_sticker, save_run
 from windowsticker.traps.loader import load_suite
 from windowsticker.warden.inference_lane import InferenceGateway
 from windowsticker.warden.proxy import EgressWarden
@@ -109,6 +109,12 @@ class Worker:
 
         async def on_record(rec: RunRecord) -> None:
             await save_run(self.db, test.id, rec)
+            store = self.settings.evidence_store()
+            if store is not None:
+                try:
+                    await archive_run(self.db, store, rec.run_id)
+                except Exception:  # the archive is a copy; never fail a run over it
+                    log.warning("could not archive %s", rec.run_id, exc_info=True)
             await refresh_sticker(self.db, test.id, suite)
 
         # Never start more microVMs than free memory can hold (keeping 1 GiB for the host).

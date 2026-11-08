@@ -255,6 +255,20 @@ async def explain_test(
     return written
 
 
+async def archive_run(db: Database, store: Any, run_id: str) -> dict[str, Any] | None:
+    """Write a run's evidence to Object Storage once and keep the hash on the run."""
+    async with db.session() as s:
+        row = await s.get(RunRow, run_id)
+        if row is None or (row.record or {}).get("archive"):
+            return None
+        rec = dict(row.record)
+        meta = await store.put_run(row.test_id, rec)
+        rec["archive"] = {**meta, "at": utcnow().isoformat(), "store": "Vultr Object Storage"}
+        row.record = rec
+        await s.commit()
+        return dict(rec["archive"])
+
+
 def all_in_cost(test: TestRow, inference_usd: float) -> dict[str, Any]:
     """Inference plus the VX1 host time the test occupied (the whole host, conservatively).
 

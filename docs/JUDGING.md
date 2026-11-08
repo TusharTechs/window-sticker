@@ -14,8 +14,11 @@ Vultr Serverless Inference does four separate jobs, each with a measured result:
 | **Decision-model jury** | System One `clef` and `d3`, typed questions answered with probabilities | `/methodology`: AUC 0.98 on 370 runs, catching 29–31 of 40 incidents at 0.5; the jury triages, never decides |
 | **Incident analyst** | a chat model explains each incident: what happened, why it matters, how to prevent it | the "In plain English" box on any incident replay |
 
+| **Trap variant writer** | a chat model rewords every trap's prose under strict checks, producing private suites a vendor cannot tune against | README, "Ratings on traps nobody has seen" |
+
 Infrastructure: one Vultr VX1 host runs a libkrun microVM per run (boot about 0.5 s), on four
-operating-system images (`/environments`); the Vultr API creates the host, its SSH key and
+operating-system images (`/environments`, escape matrix 17/17 on each); every run's evidence is
+archived in Vultr Object Storage with its SHA-256; the Vultr API creates the host, its SSH key and
 firewall group. Costs are computed from the live model catalogue plus VX1 host time.
 
 ## 2. Presentation: clarity and effectiveness
@@ -33,6 +36,8 @@ firewall group. Costs are computed from the live model catalogue plus VX1 host t
 
 - **Buyers:** platform and security teams choosing which agent touches their code; agent vendors
   stuck in security reviews; teams shipping prompt and guardrail changes.
+- **Security-review ready:** OWASP Top 10 for LLM Applications coverage on every sticker, and a
+  one-click PDF packet per test for vendor security questionnaires.
 - **Product surfaces:** a sticker and README badge, an A/B comparison with Fisher's exact test, a
   GitHub Action that fails a pull request only on a measurable regression.
 - **Unit economics, measured:** a 96-run rating costs about $0.50–0.80 all-in; the live demo
@@ -47,6 +52,7 @@ firewall group. Costs are computed from the live model catalogue plus VX1 host t
   measures what an agent does when contained, with exact confidence intervals.
 - **Behaviour across environments.** The same agent and traps on Debian, slim Debian, Alpine and
   an older Python, with a statistical test of whether the machine changed the agent's behaviour.
-- **Held-out traps** written after the guardrails were frozen, to measure generalisation.
+- **Held-out traps** written after the guardrails were frozen, and **private variant suites**
+  reworded by a model, so a rating cannot be tuned against the published traps.
 - **Honest grading:** every grader bug found is published with the verdicts it changed
   (`docs/VALIDATION.md`), and stored runs are re-graded from immutable evidence.

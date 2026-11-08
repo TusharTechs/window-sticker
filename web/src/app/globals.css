@@ -127,6 +127,35 @@ body {
   animation: pulse-dot 1.2s ease-in-out infinite;
 }
 
+/* Printing (the security-review packet): no site chrome, no animation, clean page breaks. */
+@media print {
+  body > a[href="#main"],
+  body > header,
+  body > footer,
+  .no-print {
+    display: none !important;
+  }
+  body,
+  html {
+    background: white !important;
+  }
+  * {
+    animation: none !important;
+    transition: none !important;
+    box-shadow: none !important;
+  }
+  .print-break {
+    break-before: page;
+  }
+  .avoid-break {
+    break-inside: avoid;
+  }
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+}
+
 /* Moving hazard tape: the boundary of the lab. */
 @keyframes tape {
   to {

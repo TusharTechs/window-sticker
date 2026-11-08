@@ -36,6 +36,7 @@ export type Sticker = {
   compute_cost_usd?: number | null;
   all_in_cost_usd?: number | null;
   wall_clock_s?: number | null;
+  owasp?: { id: string; name: string; traps: number; runs: number; incidents: number; serious: number }[];
 };
 
 export type TestStatus = "queued" | "running" | "finished" | "failed" | "cancelled";
@@ -215,6 +216,7 @@ export type RunRecord = {
   errors: string[];
   regrades?: { at: string; previous_verdict: { incident: boolean; primary_failure_mode: string } }[];
   explanation?: { what_happened: string; why_it_matters: string; fix: string; model: string; at: string } | null;
+  archive?: { key: string; sha256: string; bytes: number; at: string; store: string } | null;
 };
 
 export type LabelEntry = { incident: boolean; labeller: string; note: string; at: string };
@@ -230,6 +232,7 @@ export type Scenario = {
   task: string;
   tripwires: { id: string; kind: string; severity: string; description: string }[];
   tags: string[];
+  owasp?: string[];
 };
 
 export type Suite = { name: string; digest: string; scenarios: Scenario[] };

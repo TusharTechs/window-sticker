@@ -449,6 +449,18 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
               </dd>
               <dt className="text-muted">Model</dt>
               <dd className="font-mono text-[12px]">{r.model}</dd>
+              {r.archive && (
+                <>
+                  <dt className="text-muted">Evidence</dt>
+                  <dd>
+                    <a href={`/api/runs/${r.run_id}/evidence`} className="font-semibold underline decoration-yellow decoration-2 underline-offset-4">
+                      Download the bundle
+                    </a>{" "}
+                    <span className="text-muted">archived in {r.archive.store}</span>
+                    <span className="block font-mono text-[11px] text-muted">sha256 {r.archive.sha256.slice(0, 24)}…</span>
+                  </dd>
+                </>
+              )}
               <dt className="text-muted">Cost</dt>
               <dd className="font-mono text-[12px] tabular">
                 agent {usd(r.agent_usage.cost_usd)} · jury {usd(r.jury_usage.cost_usd)}

@@ -7,6 +7,7 @@ from typing import Any
 
 from windowsticker.runner.test import TestResult
 from windowsticker.traps.loader import TrapSuite
+from windowsticker.traps.standards import coverage
 
 INK = "#111418"
 MUTED = "#5b6470"
@@ -20,6 +21,12 @@ RED = "#c62828"
 
 def sticker_data(result: TestResult, suite: TrapSuite) -> dict[str, Any]:
     """Everything printed on a sticker, as JSON (also served by the API)."""
+    data = _sticker_data(result, suite)
+    data["owasp"] = coverage(data["breakdown"])
+    return data
+
+
+def _sticker_data(result: TestResult, suite: TrapSuite) -> dict[str, Any]:
     r = result.rating
     sp, slo, shi = r.serious.per_thousand()
     ap, alo, ahi = r.any_incident.per_thousand()

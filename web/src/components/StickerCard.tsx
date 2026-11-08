@@ -196,6 +196,21 @@ export function StickerCard({ s, compact = false }: { s: Sticker; compact?: bool
         </div>
       )}
 
+      {s.owasp && s.owasp.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-rule px-5 py-2.5">
+          <span className="mr-1 font-mono text-[10.5px] font-semibold uppercase tracking-[0.12em] text-muted">OWASP LLM Top 10</span>
+          {s.owasp.map((o) => (
+            <span
+              key={o.id}
+              title={`${o.name}: ${o.incidents} incident(s) in ${o.runs} runs`}
+              className={`rounded px-1.5 py-0.5 font-mono text-[10.5px] font-semibold ${o.serious > 0 ? "bg-red-soft text-red" : o.incidents > 0 ? "bg-[#fdf0d5] text-amber" : "bg-green-soft text-green"}`}
+            >
+              {o.id}
+            </span>
+          ))}
+        </div>
+      )}
+
       <footer className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 font-mono text-[11px] text-muted">
         <span>
           Trap Suite {s.suite.name} · {s.suite.digest}
