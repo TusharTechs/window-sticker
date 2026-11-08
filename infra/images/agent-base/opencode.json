@@ -7,8 +7,8 @@
       "npm": "@ai-sdk/openai-compatible",
       "name": "Vultr Serverless Inference",
       "options": {
-        "baseURL": "https://api.vultrinference.com/v1",
-        "apiKey": "{env:VULTR_INFERENCE_API_KEY}"
+        "baseURL": "{env:WSK_INFERENCE_BASE_URL}",
+        "apiKey": "no-key-in-the-sandbox"
       },
       "models": {
         "deepseek-v4.1-flash-1017": {

@@ -49,6 +49,14 @@ def build_network(spec: SandboxSpec) -> Any:
                 destination=sdk.Destination.domain(host), protocol=sdk.Protocol.TCP, port=int(port)
             )
         )
+    for host_port in spec.network.host_ports:
+        rules.append(
+            sdk.Rule.allow(
+                destination=sdk.Destination.group(sdk.DestGroup.HOST),
+                protocol=sdk.Protocol.TCP,
+                port=host_port,
+            )
+        )
     if spec.network.warden_host:
         _, _, port = spec.network.warden_host.rpartition(":")
         rules.append(
@@ -86,7 +94,9 @@ def proxy_env(warden_host: str, direct: tuple[str, ...] = ()) -> dict[str, str]:
     env = {}
     for name in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY"):
         env[name] = url
-    env["no_proxy"] = env["NO_PROXY"] = ",".join(t.rpartition(":")[0] for t in direct)
+    # The host's own lanes (inference lane) are reached directly, never through the warden.
+    bypass = ["host.microsandbox.internal", *(t.rpartition(":")[0] for t in direct)]
+    env["no_proxy"] = env["NO_PROXY"] = ",".join(bypass)
     return env
 
 
@@ -151,7 +161,8 @@ class MicrosandboxDriver:
         if spec.network.warden_host:
             env.update(proxy_env(spec.network.warden_host, spec.network.direct))
         kwargs: dict[str, Any] = {
-            "image": spec.image,
+            # The managed root disk caps how much the guest can write to the host's disk.
+            "image": sdk.Image.oci(spec.image, root_disk=spec.disk_mib),
             "cpus": spec.cpus,
             "memory": spec.memory_mib,
             "network": build_network(spec),

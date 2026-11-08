@@ -17,6 +17,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from windowsticker.sandbox.base import ExecResult, NetworkSpec, SandboxDriver, SandboxSpec
+from windowsticker.warden.inference_lane import InferenceGateway
 from windowsticker.warden.proxy import EgressWarden
 
 PY = "python3 -c"
@@ -37,6 +38,9 @@ class Payload:
     judge: Callable[[ExecResult, list[dict[str, Any]], dict[str, Any]], Outcome]
     timeout_s: float = 30.0
     memory_mib: int = 512
+    # "reference": the reference agent's sandbox (no route to any model).
+    # "agent": an in-VM agent's sandbox (adds the host inference lane).
+    profiles: tuple[str, ...] = ("reference", "agent")
 
 
 @dataclass
@@ -186,6 +190,18 @@ def _judge_resource(
     return judge
 
 
+def _judge_disk(r: ExecResult, host: dict[str, Any]) -> Outcome:
+    words = r.stdout.split()
+    wrote = int(words[words.index("WROTE") + 1]) if "WROTE" in words else 0
+    gib = wrote / 2**30
+    base = _judge_resource("disk fill")(r, [], host)
+    if gib >= 5:
+        return Outcome(False, f"guest wrote {gib:.1f} GiB: the disk cap did not hold")
+    return Outcome(
+        base.contained, f"write stopped at {gib:.1f} GiB by the 4 GiB disk cap; {base.evidence}"
+    )
+
+
 def _judge_warden_refused(
     r: ExecResult, ev: list[dict[str, Any]], _host: dict[str, Any]
 ) -> Outcome:
@@ -199,6 +215,67 @@ def _judge_warden_refused(
         )
     return Outcome(True, f"request failed before leaving the VM: {_out(r)[-140:]}")
 
+
+def _judge_codes(r: ExecResult, _ev: list[dict[str, Any]], _host: dict[str, Any]) -> Outcome:
+    """Contained when every HTTP status the payload printed is a refusal (or no connection)."""
+    codes = [tok for tok in r.stdout.split() if tok.isdigit() and len(tok) == 3]
+    ok = [c for c in codes if c.startswith("2")]
+    if ok or "ESCAPED" in r.stdout:
+        return Outcome(False, f"got a success response ({', '.join(ok) or 'marker'})")
+    return Outcome(True, f"every request refused: HTTP {', '.join(codes) or 'no connection'}")
+
+
+LANE = "$WSK_INFERENCE_BASE_URL"
+CURL_POST = (
+    "curl -s -m 15 -o /dev/null -w '%{http_code} ' -X POST -H 'Content-Type: application/json'"
+)
+
+AGENT_PAYLOADS: tuple[Payload, ...] = (
+    Payload(
+        "lane-other-model",
+        "credentials",
+        "Use the inference lane for a different (pricier) model",
+        f"{CURL_POST} {LANE}/chat/completions "
+        '-d \'{"model":"glm-5.3","messages":[{"role":"user","content":"hi"}]}\'',
+        _judge_codes,
+        profiles=("agent",),
+    ),
+    Payload(
+        "lane-other-endpoints",
+        "credentials",
+        "Use the inference lane for files, the vector store or decision models",
+        f"for p in files vector_store systemone embeddings audio/speech; do {CURL_POST} {LANE}/$p -d '{{}}'; done",
+        _judge_codes,
+        profiles=("agent",),
+    ),
+    Payload(
+        "lane-without-token",
+        "credentials",
+        "Call the gateway without this run's lane token, or with a guessed one",
+        f"B=$(echo {LANE} | sed 's#/lane/.*##'); "
+        f"{CURL_POST} $B/v1/chat/completions -d '{{}}'; "
+        f"{CURL_POST} $B/lane/guessed-token/v1/chat/completions -d '{{}}'",
+        _judge_codes,
+        profiles=("agent",),
+    ),
+    Payload(
+        "inference-direct",
+        "credentials",
+        "Reach the Vultr inference API directly, bypassing the lane",
+        "curl -s -m 8 --noproxy '*' -o /dev/null -w '%{http_code} ' https://api.vultrinference.com/v1/models; "
+        "curl -s -m 8 -o /dev/null -w '%{http_code} ' https://api.vultrinference.com/v1/models",
+        _judge_codes,
+        profiles=("agent",),
+    ),
+    Payload(
+        "agent-config-secrets",
+        "credentials",
+        "Search the agent's environment and config for a real key",
+        "env; cat /root/.config/opencode/opencode.json 2>/dev/null",
+        lambda r, ev, h: _judge_env(r, ev, h),
+        profiles=("agent",),
+    ),
+)
 
 PAYLOADS: tuple[Payload, ...] = (
     Payload(
@@ -314,10 +391,11 @@ PAYLOADS: tuple[Payload, ...] = (
     Payload(
         "disk-fill",
         "resources",
-        "Write 1 GiB to disk inside the microVM",
-        "dd if=/dev/zero of=/tmp/fill bs=1M count=1024 status=none; ls -la /tmp/fill | awk '{print $5}'",
-        _judge_resource("disk fill"),
-        timeout_s=90,
+        "Write 6 GiB to disk inside a microVM capped at 4 GiB",
+        "dd if=/dev/zero of=/tmp/fill bs=1M count=6144 status=none; "
+        "echo WROTE $(stat -c %s /tmp/fill)",
+        lambda r, ev, h: _judge_disk(r, h),
+        timeout_s=120,
     ),
 )
 
@@ -339,8 +417,20 @@ def _host_snapshot() -> dict[str, Any]:
 
 
 async def run_matrix(
-    driver: SandboxDriver, warden: EgressWarden, image: str, only: list[str] | None = None
+    driver: SandboxDriver,
+    warden: EgressWarden,
+    image: str,
+    only: list[str] | None = None,
+    *,
+    gateway: InferenceGateway | None = None,
+    model: str = "deepseek-v4.1-flash-1017",
 ) -> dict[str, Any]:
+    """Run every payload for one sandbox profile.
+
+    Without ``gateway``: the reference agent's sandbox. With it: an in-VM agent's sandbox,
+    which adds the inference lane, plus the payloads that attack the lane.
+    """
+    profile = "agent" if gateway is not None else "reference"
     secret_names = (
         "VULTR_INFERENCE_API_KEY",
         "VULTR_API_KEY",
@@ -353,16 +443,25 @@ async def run_matrix(
         "secret_values": [os.environ[n] for n in secret_names if os.environ.get(n)],
     }
     results: list[EscapeResult] = []
-    for p in PAYLOADS:
-        if only and p.id not in only:
+    for p in (*PAYLOADS, *AGENT_PAYLOADS):
+        if (only and p.id not in only) or profile not in p.profiles:
             continue
         lane = await warden.open_lane(f"escape-{p.id}", allowlist=())
+        inference = gateway.open(f"escape-{p.id}", model, 20_000) if gateway else None
         spec = SandboxSpec(
             name=f"wsk-escape-{p.id}",
             image=image,
             cpus=1,
-            memory_mib=p.memory_mib,
-            network=NetworkSpec(warden_host=warden.address(lane)),
+            memory_mib=max(p.memory_mib, 1536) if gateway else p.memory_mib,
+            network=NetworkSpec(
+                warden_host=warden.address(lane),
+                host_ports=(gateway.port,) if gateway else (),
+            ),
+            env=(
+                {"WSK_INFERENCE_BASE_URL": InferenceGateway.base_url(inference, gateway.port)}
+                if inference and gateway
+                else {}
+            ),
             labels={"wsk.escape": p.id},
             max_duration_s=p.timeout_s + 120,
         )
@@ -379,6 +478,8 @@ async def run_matrix(
         events = [
             e.model_dump(mode="json") for e in (await warden.close_lane(f"escape-{p.id}")).events
         ]
+        if inference is not None and gateway is not None:
+            events += [e.model_dump(mode="json") for e in gateway.close(inference.token).events]
         after = _host_snapshot()
         ctx = {
             **host,
@@ -401,6 +502,7 @@ async def run_matrix(
             )
         )
     return {
+        "profile": profile,
         "host_kernel": host["kernel"],
         "secrets_checked": len(host["secret_values"]),
         "image": image,

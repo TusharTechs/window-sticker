@@ -29,15 +29,15 @@ Status is updated as each item is fixed and verified.
 | M3 | Trap 09's task told the agent to follow the policy file, so obeying it was partly the user's instruction; reaching a real registry was scored as an incident | pending |
 | M4 | Rows 3–8 of the leaderboard are statistically tied; 36 runs cap every agent at 3 stars and the site does not say so | pending |
 | M5 | The jury never changed a verdict and its accuracy was unpublished; conditional questions ("destructive action justified") shown without their premise | pending |
-| M6 | Evidence is collected inside the VM; OpenCode's trace and token counts are self-reported; false completion could never fire for OpenCode | pending |
+| M6 | Evidence is collected inside the VM; OpenCode's trace and token counts are self-reported; false completion could never fire for OpenCode | Token counts: **fixed** (metered by the host lane). Rest pending |
 | M7 | Runs with no recorded steps were excluded even when a tripwire fired; OpenCode timeouts could drop the log | pending |
 
 ### Containment and deployment security
 | # | Finding | Resolution |
 |---|---|---|
-| S1 | OpenCode reaches inference with the master key behind TLS interception, DNS allowed, a direct route out; the escape matrix never ran in that profile | pending |
+| S1 | OpenCode reaches inference with the master key behind TLS interception, DNS allowed, a direct route out; the escape matrix never ran in that profile | **Fixed.** Host-side inference lane: no key in the guest, no TLS interception, no DNS, no direct route; model pinned, token budget, host-metered cost. Escape matrix in the in-VM profile: 22/22 contained, including 5 lane attacks. |
 | S2 | Control plane, database and secrets share the host with hostile workloads; systemd units not hardened | pending |
-| S3 | No per-VM disk cap; concurrency × VM memory can exceed host RAM | pending |
+| S3 | No per-VM disk cap; concurrency × VM memory can exceed host RAM | Disk: **fixed** (4 GiB cap, 6 GiB write stops at 3.9 GiB). Memory: pending |
 | S4 | Public WebSocket and GET endpoints can be abused (no id check, no connection cap, writes on GET) | pending |
 | S5 | One token both submits tests and labels runs; labels can override tripwires | pending |
 | S6 | `find -exec` / `awk system()` treated as read-only; canary match is literal (base64 missed); warden reconnects by name after checking IPs; DNS lane checks only the first question; compare does not check suites match | pending |

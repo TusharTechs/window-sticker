@@ -48,6 +48,8 @@ class NetworkSpec:
     direct: tuple[str, ...] = ()
     # host:port of the warden DNS lane on the host; required whenever direct is non-empty.
     dns_resolver: str | None = None
+    # Extra TCP ports on the host the guest may reach (e.g. the inference lane).
+    host_ports: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,7 @@ class SandboxSpec:
     labels: dict[str, str] = field(default_factory=dict)
     max_duration_s: float | None = None  # hard VM lifetime, enforced by the runtime
     intercept_tls: bool = False  # required for placeholder-secret substitution
+    disk_mib: int = 4096  # cap on the guest's writable root disk, enforced by the runtime
 
 
 @runtime_checkable

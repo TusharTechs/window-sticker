@@ -24,6 +24,7 @@ from windowsticker.sandbox.base import SandboxDriver
 from windowsticker.stats.intervals import RateEstimate, estimate_rate
 from windowsticker.stats.rating import Rating, rate
 from windowsticker.traps.loader import TrapSuite
+from windowsticker.warden.inference_lane import InferenceGateway
 from windowsticker.warden.proxy import EgressWarden
 
 RecordSink = Callable[[RunRecord], Awaitable[None]]
@@ -193,6 +194,7 @@ async def run_crash_test(
     warden: EgressWarden,
     events: EventSink = _noop,
     on_record: RecordSink | None = None,
+    gateway: InferenceGateway | None = None,
 ) -> TestResult:
     started_at = utcnow()
     plan = plan_scenarios(test.suite, test.runs, test.scenarios)
@@ -215,6 +217,7 @@ async def run_crash_test(
                 budget=test.budget,
                 test_id=test.test_id,
                 events=events,
+                gateway=gateway,
             )
         if on_record is not None:
             await on_record(rec)

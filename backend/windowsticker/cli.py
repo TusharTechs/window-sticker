@@ -121,9 +121,23 @@ def run(
                 image=settings.sandbox_image,
                 agent_image=settings.agent_image,
             )
-            result = await run_crash_test(
-                test, driver=MicrosandboxDriver(), client=client, warden=warden, events=events
+            from windowsticker.warden.inference_lane import InferenceGateway
+
+            gateway = InferenceGateway(
+                settings.require_inference_key(), settings.vultr_inference_base_url
             )
+            await gateway.start()
+            try:
+                result = await run_crash_test(
+                    test,
+                    driver=MicrosandboxDriver(),
+                    client=client,
+                    warden=warden,
+                    events=events,
+                    gateway=gateway,
+                )
+            finally:
+                await gateway.stop()
         path = write_test(result, trap_suite, out)
         r = result.rating
         console.rule("Sticker")
@@ -286,6 +300,9 @@ def image_load(
 def escape_matrix(
     out: Path = typer.Option(Path("artifacts/escape-matrix.json")),
     only: list[str] = typer.Option(None, help="Run only these payload ids"),
+    profile: str = typer.Option(
+        "reference", help="reference, or agent (in-VM agent with the inference lane)"
+    ),
 ) -> None:
     """Run every hostile payload in its own microVM and record contained / escaped."""
     from windowsticker.escape import run_matrix
@@ -295,9 +312,27 @@ def escape_matrix(
     settings = get_settings()
 
     async def main() -> None:
-        data = await run_matrix(
-            MicrosandboxDriver(), EgressWarden(), settings.sandbox_image, only or None
-        )
+        if profile == "agent":
+            from windowsticker.warden.inference_lane import InferenceGateway
+
+            gateway = InferenceGateway(
+                settings.require_inference_key(), settings.vultr_inference_base_url
+            )
+            await gateway.start()
+            try:
+                data = await run_matrix(
+                    MicrosandboxDriver(),
+                    EgressWarden(),
+                    settings.agent_image,
+                    only or None,
+                    gateway=gateway,
+                )
+            finally:
+                await gateway.stop()
+        else:
+            data = await run_matrix(
+                MicrosandboxDriver(), EgressWarden(), settings.sandbox_image, only or None
+            )
         out.parent.mkdir(parents=True, exist_ok=True)
         data["measured_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
         out.write_text(json.dumps(data, indent=2))
@@ -419,8 +454,25 @@ def worker(name: str = typer.Option(None, help="Worker name (defaults to hostnam
         async with InferenceClient(
             settings.require_inference_key(), settings.vultr_inference_base_url
         ) as client:
-            w = Worker(db, settings, MicrosandboxDriver(), client, EgressWarden(), name=name)
-            await w.run_forever()
+            from windowsticker.warden.inference_lane import InferenceGateway
+
+            gateway = InferenceGateway(
+                settings.require_inference_key(), settings.vultr_inference_base_url
+            )
+            await gateway.start()
+            try:
+                w = Worker(
+                    db,
+                    settings,
+                    MicrosandboxDriver(),
+                    client,
+                    EgressWarden(),
+                    name=name,
+                    gateway=gateway,
+                )
+                await w.run_forever()
+            finally:
+                await gateway.stop()
 
     asyncio.run(main())
 

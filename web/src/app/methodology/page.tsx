@@ -30,7 +30,7 @@ async function fetchJson<T>(path: string): Promise<T | null> {
 }
 
 const measurements = () => fetchJson<Measurements>("/api/measurements");
-const escapeMatrix = () => fetchJson<EscapeMatrix>("/api/escape-matrix");
+const escapeMatrix = (profile: string) => fetchJson<EscapeMatrix>(`/api/escape-matrix?profile=${profile}`);
 
 const CATEGORY_LABEL: Record<string, string> = {
   exfiltration: "Getting data out",
@@ -40,19 +40,19 @@ const CATEGORY_LABEL: Record<string, string> = {
   resources: "Exhausting the host",
 };
 
-function EscapeTable({ m }: { m: EscapeMatrix }) {
+function EscapeTable({ m, title, intro }: { m: EscapeMatrix; title: string; intro: string }) {
   const groups = Object.keys(CATEGORY_LABEL).filter((c) => m.results.some((r) => r.category === c));
   return (
     <section className="mt-12">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h2 className={H2}>Escape matrix</h2>
+        <h2 className={H2}>{title}</h2>
         <span className="rounded-full bg-ink px-3 py-1 font-mono text-[12px] font-semibold text-yellow">
           {m.contained}/{m.total} contained
         </span>
       </div>
       <p className="mt-2 text-[15px] leading-relaxed text-ink-2">
-        Each hostile payload runs in its own fresh microVM with exactly the network policy and warden lane a crash-test
-        run gets. A mechanical check decides &ldquo;contained&rdquo; from what the payload printed, what the warden
+        {intro} Each hostile payload runs in its own fresh microVM with exactly the network policy a crash-test run
+        gets. A mechanical check decides &ldquo;contained&rdquo; from what the payload printed, what the warden
         logged and what the host observed. Measured {m.measured_at.slice(0, 10)} on the Vultr host (kernel{" "}
         {m.host_kernel}), compared against {m.secrets_checked} real host secrets. Re-run with{" "}
         <code className="font-mono text-[13px]">windowsticker escape-matrix</code>.
@@ -88,7 +88,12 @@ function EscapeTable({ m }: { m: EscapeMatrix }) {
 const H2 = "font-display text-[24px] font-extrabold tracking-tight";
 
 export default async function MethodologyPage() {
-  const [m, meth, esc] = await Promise.all([measurements(), api.methodology(), escapeMatrix()]);
+  const [m, meth, esc, escAgent] = await Promise.all([
+    measurements(),
+    api.methodology(),
+    escapeMatrix("reference"),
+    escapeMatrix("agent"),
+  ]);
   return (
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6">
       <h1 className="font-display text-[38px] font-extrabold tracking-tight">Methodology</h1>
@@ -146,7 +151,20 @@ export default async function MethodologyPage() {
         )}
       </section>
 
-      {esc && <EscapeTable m={esc} />}
+      {esc && (
+        <EscapeTable
+          m={esc}
+          title="Escape matrix: reference agent sandbox"
+          intro="The sandbox for agents whose brain stays on the host: the only door out is the Egress Warden."
+        />
+      )}
+      {escAgent && (
+        <EscapeTable
+          m={escAgent}
+          title="Escape matrix: in-VM agent sandbox"
+          intro="The sandbox for agents that run inside the VM, such as OpenCode. It adds one more door: the inference lane on the host, which holds the key, pins the model, meters tokens and refuses every other endpoint. The guest has no key, no DNS and no direct route out."
+        />
+      )}
 
       <section className="mt-12 space-y-3 text-[15.5px] leading-relaxed text-ink-2">
         <h2 className={`${H2} text-ink`}>How a run is graded</h2>

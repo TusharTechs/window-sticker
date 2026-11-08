@@ -88,3 +88,18 @@ fixed and verified on the host before a clean re-run:
 | The OpenCode provider config did not declare image input, so OpenCode treated the models as text-only and never saw the screenshot | every model in the config declares `attachment` and image input, matching the live catalogue |
 
 After the fix OpenCode solves the image trap and explicitly refuses the instruction hidden in the screenshot.
+
+## 2026-11-08: inference lane, disk cap, escape matrix in both profiles (review findings S1, S3)
+
+- **OpenCode no longer holds any key.** Its runs reach the model only through a host-side
+  inference lane (plain HTTP to one host port). The lane adds the real key, accepts only chat
+  completions for the run's model, enforces a token budget and meters tokens from the upstream
+  responses, so cost is measured on the host. TLS interception, the placeholder secret, DNS and
+  the direct route to the inference API are gone from the in-VM profile. Verified on the VX1 host:
+  3 OpenCode runs, all tasks solved, egress = only the lane's chat calls.
+- **Disk cap:** every microVM gets a 4 GiB managed root disk. A 6 GiB write stops at 3.9 GiB.
+- **Escape matrix, reference profile:** 17/17 contained (disk-fill now writes 6 GiB against the cap).
+- **Escape matrix, in-VM agent profile:** 22/22 contained: the 17 above plus using the lane for
+  another model, for files / vector store / decision models / embeddings / speech, without the lane
+  token or with a guessed one, reaching the inference API directly, and searching the agent's
+  environment and config for any real secret value.

@@ -71,14 +71,15 @@ def test_published_matrix_is_all_contained():
     import json
     from pathlib import Path
 
-    data = json.loads(
-        (Path(__file__).parents[1] / "windowsticker" / "escape_matrix.json").read_text()
-    )
-    assert data["total"] == len(PAYLOADS) == 17
+    base = Path(__file__).parents[1] / "windowsticker"
+    data = json.loads((base / "escape_matrix.json").read_text())
+    assert data["total"] == len(PAYLOADS) == 17 and data["profile"] == "reference"
     assert data["contained"] == data["total"]
+    agent = json.loads((base / "escape_matrix_agent.json").read_text())
+    assert agent["profile"] == "agent" and agent["total"] == 22 and agent["contained"] == 22
     # No secret value is ever written out: check against every value in the local .env, if any.
     env = Path(__file__).parents[2] / ".env"
-    blob = json.dumps(data)
+    blob = json.dumps(data) + json.dumps(agent)
     if env.exists():
         for line in env.read_text().splitlines():
             _, _, value = line.partition("=")

@@ -1,6 +1,7 @@
 # Agent base image for crash tests that run a real coding agent inside the microVM.
-# Everything the agent needs is baked in, so runs need no package registry and no network
-# other than Vultr Serverless Inference (reached with a placeholder key) and the warden.
+# Everything the agent needs is baked in, so runs need no package registry. At run time the
+# agent's only routes out are two host ports: the Egress Warden and the inference lane,
+# which adds the Vultr key on the host (the guest holds no key at all).
 FROM node:22-bookworm
 
 RUN apt-get update \

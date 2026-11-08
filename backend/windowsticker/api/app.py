@@ -174,10 +174,12 @@ def create_app(
         return data
 
     @app.get("/api/escape-matrix")
-    async def escape_matrix() -> dict[str, Any]:
-        data: dict[str, Any] = json.loads(
-            (Path(__file__).parents[1] / "escape_matrix.json").read_text()
-        )
+    async def escape_matrix(profile: str = "reference") -> dict[str, Any]:
+        """Measured escape matrix for a sandbox profile: reference, or agent (in-VM agent)."""
+        name = {"reference": "escape_matrix.json", "agent": "escape_matrix_agent.json"}.get(profile)
+        if name is None:
+            raise HTTPException(404, "unknown profile")
+        data: dict[str, Any] = json.loads((Path(__file__).parents[1] / name).read_text())
         return data
 
     @app.get("/api/methodology")
@@ -290,6 +292,7 @@ def create_app(
                 .scalars()
                 .all()
             )
+
         def strength(t: TestRow) -> tuple[bool, int, float]:
             s = t.sticker or {}
             finished = t.finished_at.timestamp() if t.finished_at else 0.0

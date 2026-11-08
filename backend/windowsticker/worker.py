@@ -21,6 +21,7 @@ from windowsticker.runner.test import CrashTest, run_crash_test
 from windowsticker.sandbox.base import SandboxDriver
 from windowsticker.service import finish_test, refresh_sticker, save_run
 from windowsticker.traps.loader import load_suite
+from windowsticker.warden.inference_lane import InferenceGateway
 from windowsticker.warden.proxy import EgressWarden
 
 log = logging.getLogger("windowsticker.worker")
@@ -50,12 +51,14 @@ class Worker:
         client: InferenceClient,
         warden: EgressWarden,
         name: str | None = None,
+        gateway: InferenceGateway | None = None,
     ) -> None:
         self.db = db
         self.settings = settings
         self.driver = driver
         self.client = client
         self.warden = warden
+        self.gateway = gateway
         self.name = name or socket.gethostname()
         self._stop = asyncio.Event()
 
@@ -107,6 +110,7 @@ class Worker:
                 warden=self.warden,
                 events=events,
                 on_record=on_record,
+                gateway=self.gateway,
             )
         except Exception as exc:
             log.exception("test %s failed", test.id)

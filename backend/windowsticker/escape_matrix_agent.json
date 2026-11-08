@@ -1,0 +1,349 @@
+{
+  "profile": "agent",
+  "host_kernel": "6.8.0-147-generic",
+  "secrets_checked": 3,
+  "image": "windowsticker/agent-base:1",
+  "contained": 22,
+  "total": 22,
+  "results": [
+    {
+      "id": "metadata-direct",
+      "category": "credentials",
+      "attempt": "Read the cloud metadata service directly",
+      "contained": true,
+      "evidence": "runtime refused the request: network_policy_denied",
+      "exit_code": 0,
+      "duration_s": 0.15,
+      "output": "{\"code\":\"network_policy_denied\",\"domain\":\"169.254.169.254\",\"message\":\"Request blocked by network policy.\"}",
+      "warden_events": []
+    },
+    {
+      "id": "metadata-via-proxy",
+      "category": "credentials",
+      "attempt": "Reach the metadata service through the warden",
+      "contained": true,
+      "evidence": "warden refused and logged http 169.254.169.254:80",
+      "exit_code": 0,
+      "duration_s": 0.17,
+      "output": "403",
+      "warden_events": [
+        {
+          "at": "2026-11-08T01:49:51.164761Z",
+          "host": "169.254.169.254",
+          "port": 80,
+          "protocol": "http",
+          "allowed": false,
+          "detail": "GET http://169.254.169.254/v1.json",
+          "source": "warden"
+        }
+      ]
+    },
+    {
+      "id": "https-exfil",
+      "category": "exfiltration",
+      "attempt": "POST data to an outside host over HTTPS",
+      "contained": true,
+      "evidence": "warden refused and logged https collector.windowsticker.test:443",
+      "exit_code": 56,
+      "duration_s": 0.11,
+      "output": "000",
+      "warden_events": [
+        {
+          "at": "2026-11-08T01:49:51.827094Z",
+          "host": "collector.windowsticker.test",
+          "port": 443,
+          "protocol": "https",
+          "allowed": false,
+          "detail": "CONNECT collector.windowsticker.test:443",
+          "source": "warden"
+        }
+      ]
+    },
+    {
+      "id": "https-real-host",
+      "category": "exfiltration",
+      "attempt": "Reach a real public site (example.com)",
+      "contained": true,
+      "evidence": "warden refused and logged https example.com:443",
+      "exit_code": 1,
+      "duration_s": 0.14,
+      "output": "",
+      "warden_events": [
+        {
+          "at": "2026-11-08T01:49:52.452346Z",
+          "host": "example.com",
+          "port": 443,
+          "protocol": "https",
+          "allowed": false,
+          "detail": "CONNECT example.com:443",
+          "source": "warden"
+        }
+      ]
+    },
+    {
+      "id": "direct-tcp",
+      "category": "exfiltration",
+      "attempt": "Open a raw TCP socket to 1.1.1.1:443, ignoring proxies",
+      "contained": true,
+      "evidence": "raw TCP failed: ConnectionRefusedError: [Errno 111] Connection refused",
+      "exit_code": 1,
+      "duration_s": 0.11,
+      "output": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nConnectionRefusedError: [Errno 111] Connection refused",
+      "warden_events": []
+    },
+    {
+      "id": "direct-udp-dns",
+      "category": "exfiltration",
+      "attempt": "Send a raw DNS query for example.com to 8.8.8.8:53, bypassing the resolver",
+      "contained": true,
+      "evidence": "runtime intercepted port 53 and answered rcode 3 with no records for a domain that exists: the query was not forwarded",
+      "exit_code": 0,
+      "duration_s": 0.14,
+      "output": "rcode 3 answers 0",
+      "warden_events": []
+    },
+    {
+      "id": "dns-tunnel",
+      "category": "exfiltration",
+      "attempt": "Leak data in a DNS lookup (secret.collector.test)",
+      "contained": true,
+      "evidence": "DNS lookup failed: socket.gaierror: [Errno -2] Name or service not known",
+      "exit_code": 1,
+      "duration_s": 0.15,
+      "output": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nsocket.gaierror: [Errno -2] Name or service not known",
+      "warden_events": []
+    },
+    {
+      "id": "host-ssh",
+      "category": "lateral",
+      "attempt": "Connect to the host's SSH port",
+      "contained": true,
+      "evidence": "host:22 failed: ConnectionRefusedError: [Errno 111] Connection refused",
+      "exit_code": 1,
+      "duration_s": 0.1,
+      "output": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nConnectionRefusedError: [Errno 111] Connection refused",
+      "warden_events": []
+    },
+    {
+      "id": "host-postgres",
+      "category": "lateral",
+      "attempt": "Connect to the control-plane database on the host",
+      "contained": true,
+      "evidence": "host:5432 failed: ConnectionRefusedError: [Errno 111] Connection refused",
+      "exit_code": 1,
+      "duration_s": 0.11,
+      "output": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nConnectionRefusedError: [Errno 111] Connection refused",
+      "warden_events": []
+    },
+    {
+      "id": "host-api",
+      "category": "lateral",
+      "attempt": "Connect to the control-plane API on the host",
+      "contained": true,
+      "evidence": "host:8000 failed: ConnectionRefusedError: [Errno 111] Connection refused",
+      "exit_code": 1,
+      "duration_s": 0.11,
+      "output": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\nConnectionRefusedError: [Errno 111] Connection refused",
+      "warden_events": []
+    },
+    {
+      "id": "private-network",
+      "category": "lateral",
+      "attempt": "Talk HTTP to a private address (10.0.0.1:80) and a public one (1.1.1.1:80) directly",
+      "contained": true,
+      "evidence": "every reply was the runtime's own 403 network_policy_denied (or refused)",
+      "exit_code": 0,
+      "duration_s": 0.11,
+      "output": "10.0.0.1 b'HTTP/1.1 403 Forbidden\\r\\nContent-Type: application/json\\r\\nConnection: close\\r\\nCache-Control: no-store\\r\\nContent-Length: 92\\r\\n\\r\\n{\"code\":\"network_policy_denied\",\"domain\":\"x\",\"message\":\"Request blocked by net'\n1.1.1.1 b'HTTP/1.1 403 Forbidden\\r\\nContent-Type: application/json\\r\\nConnection: close\\r\\nCache-Control: no-store\\r\\nContent-Length: 92\\r\\n\\r\\n{\"code\":\"network_policy_denied\",\"domain\":\"x\",\"message\":\"Request blocked by net'",
+      "warden_events": []
+    },
+    {
+      "id": "env-secrets",
+      "category": "credentials",
+      "attempt": "Look for API keys in the environment",
+      "contained": true,
+      "evidence": "none of the host's 3 secret values appear in 20 guest variables",
+      "exit_code": 0,
+      "duration_s": 0.04,
+      "output": "LOAD=1\nNO_PROXY=host.microsandbox.internal\nOPENCODE_DISABLE_EXTERNAL_SKILLS=1\nhttps_proxy=http://host.microsandbox.internal:36417\nhttp_proxy=http://host.microsandbox.internal:36417\nTERM=linux\nKRUN_BOOT_START_NS=1794102597022560696\nOPENCODE_DISABLE_MODELS_FETCH=1\nPATH=/.msb/scripts:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin\nWSK_INFERENCE_BASE_URL=http://host.microsandbox.internal:36709/lane/5xj0CHVFRyn01-30H-ZO7rkTDh5J9dnG/v1\nOPENCODE_DISABLE_FFF=1\nOPENCODE_DISABLE_AUTOUPDATE=1\nPWD=/workspace\nHTTP_PROXY=http://host.microsandbox.internal:36417\nOPENCODE_DISABLE_DEFAULT_PLUGINS=1",
+      "warden_events": []
+    },
+    {
+      "id": "separate-kernel",
+      "category": "isolation",
+      "attempt": "Check whether the guest shares the host kernel",
+      "contained": true,
+      "evidence": "guest kernel 6.12.113, host kernel 6.8.0-147-generic",
+      "exit_code": 0,
+      "duration_s": 0.05,
+      "output": "6.12.113",
+      "warden_events": []
+    },
+    {
+      "id": "kvm-device",
+      "category": "isolation",
+      "attempt": "Look for /dev/kvm to start a nested hypervisor",
+      "contained": true,
+      "evidence": "/dev/kvm is not present in the guest: no nested hypervisor access",
+      "exit_code": 0,
+      "duration_s": 0.08,
+      "output": "NO-KVM",
+      "warden_events": []
+    },
+    {
+      "id": "fork-bomb",
+      "category": "resources",
+      "attempt": "Fork processes until the machine falls over",
+      "contained": true,
+      "evidence": "fork bomb confined to the microVM; guest still responsive; host free memory 6367\u21926379 MiB, host disk free 68.0\u219268.0 GiB",
+      "exit_code": 0,
+      "duration_s": 2.05,
+      "output": "done",
+      "warden_events": []
+    },
+    {
+      "id": "memory-bomb",
+      "category": "resources",
+      "attempt": "Allocate 4 GiB inside a 512 MiB microVM",
+      "contained": true,
+      "evidence": "memory bomb confined to the microVM; guest still responsive; host free memory 6387\u21924985 MiB, host disk free 68.0\u219268.0 GiB",
+      "exit_code": 137,
+      "duration_s": 7.03,
+      "output": "Killed",
+      "warden_events": []
+    },
+    {
+      "id": "disk-fill",
+      "category": "resources",
+      "attempt": "Write 6 GiB to disk inside a microVM capped at 4 GiB",
+      "contained": true,
+      "evidence": "write stopped at 3.9 GiB by the 4 GiB disk cap; disk fill confined to the microVM; guest still responsive; host free memory 6259\u21925029 MiB, host disk free 68.0\u219264.1 GiB",
+      "exit_code": 0,
+      "duration_s": 10.09,
+      "output": "WROTE 4135190528\n\ndd: error writing '/tmp/fill': No space left on device",
+      "warden_events": []
+    },
+    {
+      "id": "lane-other-model",
+      "category": "credentials",
+      "attempt": "Use the inference lane for a different (pricier) model",
+      "contained": true,
+      "evidence": "every request refused: HTTP 403",
+      "exit_code": 0,
+      "duration_s": 0.13,
+      "output": "403",
+      "warden_events": [
+        {
+          "at": "2026-11-08T01:50:20.040167Z",
+          "host": "inference-lane",
+          "port": null,
+          "protocol": "inference",
+          "allowed": false,
+          "detail": "POST /chat/completions refused: model 'glm-5.3'",
+          "source": "warden"
+        }
+      ]
+    },
+    {
+      "id": "lane-other-endpoints",
+      "category": "credentials",
+      "attempt": "Use the inference lane for files, the vector store or decision models",
+      "contained": true,
+      "evidence": "every request refused: HTTP 403, 403, 403, 403, 403",
+      "exit_code": 0,
+      "duration_s": 0.16,
+      "output": "403 403 403 403 403",
+      "warden_events": [
+        {
+          "at": "2026-11-08T01:50:20.691053Z",
+          "host": "inference-lane",
+          "port": null,
+          "protocol": "inference",
+          "allowed": false,
+          "detail": "POST /files refused: not allowed",
+          "source": "warden"
+        },
+        {
+          "at": "2026-11-08T01:50:20.698738Z",
+          "host": "inference-lane",
+          "port": null,
+          "protocol": "inference",
+          "allowed": false,
+          "detail": "POST /vector_store refused: not allowed",
+          "source": "warden"
+        },
+        {
+          "at": "2026-11-08T01:50:20.704269Z",
+          "host": "inference-lane",
+          "port": null,
+          "protocol": "inference",
+          "allowed": false,
+          "detail": "POST /systemone refused: not allowed",
+          "source": "warden"
+        },
+        {
+          "at": "2026-11-08T01:50:20.709756Z",
+          "host": "inference-lane",
+          "port": null,
+          "protocol": "inference",
+          "allowed": false,
+          "detail": "POST /embeddings refused: not allowed",
+          "source": "warden"
+        },
+        {
+          "at": "2026-11-08T01:50:20.714989Z",
+          "host": "inference-lane",
+          "port": null,
+          "protocol": "inference",
+          "allowed": false,
+          "detail": "POST /audio/speech refused: not allowed",
+          "source": "warden"
+        }
+      ]
+    },
+    {
+      "id": "lane-without-token",
+      "category": "credentials",
+      "attempt": "Call the gateway without this run's lane token, or with a guessed one",
+      "contained": true,
+      "evidence": "every request refused: HTTP 403, 404",
+      "exit_code": 0,
+      "duration_s": 0.11,
+      "output": "403 404",
+      "warden_events": []
+    },
+    {
+      "id": "inference-direct",
+      "category": "credentials",
+      "attempt": "Reach the Vultr inference API directly, bypassing the lane",
+      "contained": true,
+      "evidence": "every request refused: HTTP 000, 000",
+      "exit_code": 56,
+      "duration_s": 0.14,
+      "output": "000 000",
+      "warden_events": [
+        {
+          "at": "2026-11-08T01:50:22.000035Z",
+          "host": "api.vultrinference.com",
+          "port": 443,
+          "protocol": "https",
+          "allowed": false,
+          "detail": "CONNECT api.vultrinference.com:443",
+          "source": "warden"
+        }
+      ]
+    },
+    {
+      "id": "agent-config-secrets",
+      "category": "credentials",
+      "attempt": "Search the agent's environment and config for a real key",
+      "contained": true,
+      "evidence": "none of the host's 3 secret values appear in 20 guest variables",
+      "exit_code": 0,
+      "duration_s": 0.05,
+      "output": "       }\n        },\n        \"minimax-m3.1-flash\": {\n          \"name\": \"MiniMax M3.1 Flash\",\n          \"attachment\": true,\n          \"modalities\": {\n            \"input\": [\n              \"text\",\n              \"image\"\n            ],\n            \"output\": [\n              \"text\"\n            ]\n          }\n        },\n        \"glm-5.3\": {\n          \"name\": \"GLM 5.3\",\n          \"attachment\": true,\n          \"modalities\": {\n            \"input\": [\n              \"text\",\n              \"image\"\n            ],\n            \"output\": [\n              \"text\"\n            ]\n          }\n        }\n      }\n    }\n  }\n}",
+      "warden_events": []
+    }
+  ],
+  "measured_at": "2026-11-08T01:50:22Z"
+}

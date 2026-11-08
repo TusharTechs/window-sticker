@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from windowsticker.agents.config import AgentConfig
-from windowsticker.agents.opencode import INFERENCE_HOST, OpenCodeAgent
+from windowsticker.agents.opencode import OpenCodeAgent
 from windowsticker.agents.reference import Attachment, EventSink, ReferenceAgent, _noop
 from windowsticker.domain import (
     CapEvent,
@@ -32,10 +32,11 @@ from windowsticker.grading.fusion import fuse
 from windowsticker.grading.jury import DEFAULT_JURORS, convene
 from windowsticker.grading.tripwires import evaluate_tripwires
 from windowsticker.inference.client import InferenceClient, Usage
-from windowsticker.sandbox.base import NetworkSpec, Sandbox, SandboxDriver, SandboxSpec, SecretSpec
+from windowsticker.sandbox.base import NetworkSpec, Sandbox, SandboxDriver, SandboxSpec
 from windowsticker.traps.canary import make_canaries
 from windowsticker.traps.loader import TrapSuite, materialise
 from windowsticker.traps.schema import Scenario
+from windowsticker.warden.inference_lane import InferenceGateway
 from windowsticker.warden.proxy import EgressWarden
 
 HASH_ROOTS = ("/workspace", "/root", "/etc/cron.d", "/opt")
@@ -128,6 +129,7 @@ async def execute_run(
     test_id: str = "adhoc",
     run_id: str | None = None,
     events: EventSink = _noop,
+    gateway: InferenceGateway | None = None,
 ) -> RunRecord:
     return await _execute_run(
         suite=suite,
@@ -145,6 +147,7 @@ async def execute_run(
         test_id=test_id,
         run_id=run_id or new_run_id(),
         sink=events,
+        gateway=gateway,
     )
 
 
@@ -165,6 +168,7 @@ async def _execute_run(
     test_id: str,
     run_id: str,
     sink: EventSink,
+    gateway: InferenceGateway | None,
 ) -> RunRecord:
     budget = budget or RunBudget()
 
@@ -182,19 +186,24 @@ async def _execute_run(
     agent_usage = Usage()
     # An agent whose brain runs inside the VM (OpenCode) must reach the inference API: it
     # gets that one destination directly, a filtering DNS lane, and a placeholder key.
+    # An agent whose brain runs inside the VM (OpenCode) reaches the model only through the
+    # host's inference lane: plain HTTP to one host port, no key in the guest, no DNS, no
+    # direct route out. The lane adds the key, pins the model and meters tokens.
     inside = agent.adapter == "opencode"
-    lane = await warden.open_lane(
-        run_id, allowlist=(), dns_allow=(INFERENCE_HOST,) if inside else ()
+    if inside and gateway is None:
+        raise RuntimeError("agents that run inside the VM need the inference gateway")
+    lane = await warden.open_lane(run_id, allowlist=())
+    inference_lane = (
+        gateway.open(run_id, agent.model, budget.token_budget) if inside and gateway else None
     )
     network = NetworkSpec(
         warden_host=warden.address(lane),
-        direct=(f"{INFERENCE_HOST}:443",) if inside else (),
-        dns_resolver=f"127.0.0.1:{lane.dns_port}" if inside else None,
+        host_ports=(gateway.port,) if inference_lane and gateway else (),
     )
-    secrets = (
-        (SecretSpec("VULTR_INFERENCE_API_KEY", client.secret_for_sandbox(), (INFERENCE_HOST,)),)
-        if inside
-        else ()
+    env = (
+        {"WSK_INFERENCE_BASE_URL": InferenceGateway.base_url(inference_lane, gateway.port)}
+        if inference_lane and gateway
+        else {}
     )
     spec = SandboxSpec(
         name=f"wsk-{run_id}",
@@ -202,8 +211,7 @@ async def _execute_run(
         cpus=cpus,
         memory_mib=max(memory_mib, 1536) if inside else memory_mib,
         network=network,
-        secrets=secrets,
-        intercept_tls=inside,
+        env=env,
         labels={"wsk.run": run_id, "wsk.test": test_id},
         # Hard VM lifetime enforced by the runtime: agent budget + setup, check and grace.
         max_duration_s=budget.wall_clock_s + 180,
@@ -283,6 +291,15 @@ async def _execute_run(
     finally:
         lane = await warden.close_lane(run_id)
         evidence.egress = lane.events
+        if inference_lane is not None and gateway is not None:
+            metered = gateway.close(inference_lane.token)
+            evidence.egress += metered.events
+            # Cost from tokens the host metered, not from what the agent reported.
+            agent_usage = Usage(
+                metered.prompt_tokens,
+                metered.completion_tokens,
+                await client.cost(agent.model, metered.prompt_tokens, metered.completion_tokens),
+            )
         t2 = time.perf_counter()
         if sandbox is not None:
             with contextlib.suppress(Exception):
