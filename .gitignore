@@ -31,3 +31,12 @@ artifacts/
 
 # built image archives
 infra/images/**/*.tar
+
+# Video build outputs and regenerable media (rebuild with submission/video: record, music, render)
+submission/video/node_modules/
+submission/video/out/
+submission/video/public/footage/
+submission/video/public/vo/*.wav
+submission/video/public/music.wav
+docs/submission/*.mp4
+web/deck-tmp.mjs

@@ -1,0 +1,13 @@
+[
+  ["s01", "Your AI coding agent reads READMEs, tickets and tool output, and runs commands with your credentials. So what happens when one of them lies?"],
+  ["s02", "This is Window Sticker. Every AI agent should ship with a crash test rating."],
+  ["s03", "We run an agent dozens of times, each run in its own throwaway micro V M on Vultr, against a published suite of traps. Then we print what we measured: how often it did something dangerous, with an exact confidence interval, how often it finished the job, and what it cost."],
+  ["s04", "Every run boots a fresh micro V M in about half a second, plants one trap in a real task, and lets the agent work. Mechanical tripwires decide the verdict. Two Vultr decision models triage. A Vultr model explains it in plain English. Then the V M is destroyed, and its evidence is archived in Vultr Object Storage."],
+  ["s05", "And this is live. A judge picks a model, guardrails and an operating system. Six real micro V Ms boot on a Vultr V X 1 host, and each verdict lands as it is graded, in about a minute."],
+  ["s06", "Here, the agent ran a config checker that hides an A P I key inside a D N S lookup, then pasted the key into lookups itself. The tripwire caught it at the exact step. And nothing left the lab. No D N S answers, no route out, and the key was a canary, minted for this run alone."],
+  ["s07", "Across nine configurations, six Vultr models and five hundred and seventy six real runs, the ratings separate the careful agents from the reckless ones."],
+  ["s08", "And the measurements found what a demo never shows. On an older Python, the same agent reached for an unknown package index ten times in twelve, against three on a newer one. Six tool guardrails refused none of the attacks they were never written for. And containment held on every operating system we tried."],
+  ["s09", "All of it runs on Vultr. V X 1 compute for the micro V Ms. Serverless Inference for the agents, the jury, the analyst and the trap writer. And Object Storage for the evidence."],
+  ["s10", "Teams get a badge, a security review packet mapped to the oh-wasp top ten for L L Ms, and a C I gate that fails only on a measurable regression."],
+  ["s11", "Everyone else sells the cage. We sell the crash rating. Window Sticker."]
+]

@@ -1,0 +1,117 @@
+{
+ "fps": 30,
+ "total": 160.16,
+ "frames": 4805,
+ "scenes": [
+  {
+   "id": "cold",
+   "vo": "s01",
+   "start": 0.0,
+   "length": 10.64,
+   "voAt": 1.0,
+   "from": 0,
+   "frames": 319,
+   "voFrom": 30
+  },
+  {
+   "id": "logo",
+   "vo": "s02",
+   "start": 10.64,
+   "length": 6.72,
+   "voAt": 11.54,
+   "from": 319,
+   "frames": 202,
+   "voFrom": 346
+  },
+  {
+   "id": "idea",
+   "vo": "s03",
+   "start": 17.36,
+   "length": 17.41,
+   "voAt": 17.76,
+   "from": 521,
+   "frames": 522,
+   "voFrom": 533
+  },
+  {
+   "id": "how",
+   "vo": "s04",
+   "start": 34.77,
+   "length": 21.51,
+   "voAt": 35.17,
+   "from": 1043,
+   "frames": 645,
+   "voFrom": 1055
+  },
+  {
+   "id": "live",
+   "vo": "s05",
+   "start": 56.28,
+   "length": 22.0,
+   "voAt": 56.78,
+   "from": 1688,
+   "frames": 660,
+   "voFrom": 1703
+  },
+  {
+   "id": "contain",
+   "vo": "s06",
+   "start": 78.28,
+   "length": 19.24,
+   "voAt": 78.78,
+   "from": 2348,
+   "frames": 577,
+   "voFrom": 2363
+  },
+  {
+   "id": "results",
+   "vo": "s07",
+   "start": 97.52,
+   "length": 10.47,
+   "voAt": 97.92,
+   "from": 2926,
+   "frames": 314,
+   "voFrom": 2938
+  },
+  {
+   "id": "findings",
+   "vo": "s08",
+   "start": 107.99,
+   "length": 19.73,
+   "voAt": 108.39,
+   "from": 3240,
+   "frames": 592,
+   "voFrom": 3252
+  },
+  {
+   "id": "vultr",
+   "vo": "s09",
+   "start": 127.72,
+   "length": 12.72,
+   "voAt": 128.12,
+   "from": 3832,
+   "frames": 382,
+   "voFrom": 3844
+  },
+  {
+   "id": "business",
+   "vo": "s10",
+   "start": 140.44,
+   "length": 10.58,
+   "voAt": 140.84,
+   "from": 4213,
+   "frames": 317,
+   "voFrom": 4225
+  },
+  {
+   "id": "close",
+   "vo": "s11",
+   "start": 151.02,
+   "length": 9.14,
+   "voAt": 151.62,
+   "from": 4531,
+   "frames": 274,
+   "voFrom": 4549
+  }
+ ]
+}

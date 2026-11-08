@@ -21,6 +21,8 @@ Everything on a sticker is measured from real runs. Every number carries its sam
 **Live:** https://107-191-39-70.sslip.io (served from the Vultr VX1 sandbox host itself) ·
 **Code:** https://github.com/TusharTechs/window-sticker
 
+**Video, deck and a sample review packet:** see [submission/README.md](submission/README.md).
+
 **Judges, start here:** [/tour](https://107-191-39-70.sslip.io/tour), nine short steps, including a live crash test
 you start yourself: pick a model, guardrails and an operating system, and watch six real runs land in about a minute.
 
