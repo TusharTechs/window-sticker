@@ -31,6 +31,7 @@
 | What | Where |
 |---|---|
 | **Start here: guided tour with a live crash test you run yourself** | https://107-191-39-70.sslip.io/tour |
+| **Judges pack: a 5-minute review path, results and criteria on one page** | [docs/JUDGES_PACK.md](docs/JUDGES_PACK.md) · [PDF](docs/submission/window-sticker-judges-pack.pdf) · [release with all files](https://github.com/TusharTechs/window-sticker/releases/tag/v1.0-submission) |
 | Live product | https://107-191-39-70.sslip.io |
 | Leaderboard: 9 configurations, 6 Vultr models, 576 runs | https://107-191-39-70.sslip.io/leaderboard |
 | Same agent on four operating systems | https://107-191-39-70.sslip.io/environments |
