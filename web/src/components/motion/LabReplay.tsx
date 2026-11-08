@@ -35,7 +35,8 @@ function phaseAt(i: number, t: number, run: ReplayRun): Phase {
  */
 export function LabReplay({ tests }: { tests: ReplayTest[] }) {
   const [which, setWhich] = useState(0);
-  const [t, setT] = useState(0);
+  // Start finished, so the server-rendered page shows the real outcome; the replay restarts on view.
+  const [t, setT] = useState(Number.POSITIVE_INFINITY);
   const [epoch, setEpoch] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: false, margin: "-120px" });
@@ -141,7 +142,7 @@ export function LabReplay({ tests }: { tests: ReplayTest[] }) {
                       transition={{ duration: BOOT, ease: "linear" }}
                     />
                   )}
-                  <span className="relative">{r.tag.slice(0, 4)}</span>
+                  <span className="relative max-w-full truncate px-0.5 tracking-tight">{r.tag}</span>
                 </motion.span>
               </Link>
             </li>

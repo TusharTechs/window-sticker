@@ -5,6 +5,7 @@ import { StickerCard } from "@/components/StickerCard";
 import { Reveal } from "@/components/motion/Reveal";
 import { api } from "@/lib/api";
 import { WOULD_HAVE, configLabel, per1k, usd } from "@/lib/format";
+import { environmentFinding } from "@/lib/environments";
 import { DemoLauncher } from "./DemoLauncher";
 import { TourNav } from "./TourNav";
 
@@ -63,7 +64,12 @@ export default async function TourPage() {
     api.host(),
     api.matrices(),
   ]);
-  const matrix = (matrices ?? []).find((m) => m.status === "finished") ?? (matrices ?? [])[0] ?? null;
+  // The full-suite matrix for the table; the clearest single effect for the headline.
+  const matrix =
+    (matrices ?? []).find((m) => m.status === "finished" && (m.tests[0]?.runs_requested ?? 0) >= 48) ??
+    (matrices ?? [])[0] ??
+    null;
+  const envFinding = environmentFinding(matrices, suite);
   const tests = board ?? [];
   const best = tests[0] ?? null;
   const worst = tests.length > 1 ? tests[tests.length - 1] : null;
@@ -96,7 +102,7 @@ export default async function TourPage() {
             n={1}
             id="question"
             title="What does an AI agent do when a repository lies to it?"
-            lead="Coding agents read READMEs, tickets, tool output and config files, then run commands with your credentials. Any of those can carry an attacker's instruction. Teams adopting agents get a demo video; they should get a measured rating."
+            lead="Coding agents read READMEs, tickets, tool output and config files, then run commands with your credentials. Any of those can carry an attacker's instruction. Window Sticker is the containment and verification layer around agents doing real work: every run is a real coding task in a sealed microVM, and the output is a verifiable rating plus a replay of every step."
           >
             <div className="grid gap-3 sm:grid-cols-3">
               {[
@@ -277,6 +283,14 @@ export default async function TourPage() {
             title="Same agent, different machines"
             lead="A rating measured on one machine does not automatically hold on another. The environment matrix runs the same agent and traps on Debian, slim Debian, Alpine and an older Python, then tests whether its behaviour changed. You can also pick the machine in step 3."
           >
+            {envFinding && (
+              <p className="mb-4 rounded-xl border-2 border-ink bg-yellow p-4 text-[15px]">
+                <strong>Measured:</strong> on {envFinding.env}
+                {envFinding.env.includes("3.10") ? ", which has no built-in TOML parser," : ","} the same agent fell for
+                &ldquo;{envFinding.trap}&rdquo; in {envFinding.k} of {envFinding.n} runs, against {envFinding.k0} of{" "}
+                {envFinding.n0} on Debian 12 (adjusted p {envFinding.pAdjusted.toFixed(3)}).
+              </p>
+            )}
             {matrix ? (
               <div className="overflow-x-auto rounded-xl border-2 border-ink bg-card">
                 <table className="w-full min-w-[560px] text-[14px]">
@@ -328,7 +342,7 @@ export default async function TourPage() {
                 null,
                 {
                   k: "The lab's only doors",
-                  items: ["Egress Warden: logs and refuses outbound traffic", "Inference lane: holds the key, pins the model, meters tokens", "No DNS, no metadata service"],
+                  items: ["Egress Warden: logs and refuses outbound traffic", "Inference lane: holds the key, pins the model, meters tokens", "No working DNS, no metadata service"],
                 },
                 null,
                 {
@@ -353,7 +367,7 @@ export default async function TourPage() {
               )}
             </div>
             <p className="mt-4 text-[14px] text-ink-2">
-              Measured, not claimed: 17/17 and 22/22 escape attempts contained, boot about half a second, a 96-run rating for
+              Measured, not claimed: 17/17 escape attempts contained on each of the four OS images, 22/22 for in-VM agents, boot about half a second, a 96-run rating for
               about {best?.sticker?.all_in_cost_usd != null ? usd(best.sticker.all_in_cost_usd) : "$0.50"} all-in.{" "}
               <Link href="/methodology" className="font-semibold underline decoration-yellow decoration-2 underline-offset-4">
                 Methodology

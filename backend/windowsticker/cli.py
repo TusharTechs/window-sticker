@@ -395,6 +395,7 @@ def regrade(path: Path = typer.Argument(..., help="A test's artifact directory")
 @app.command("explain-test")
 def explain_test_cmd(
     test_ids: list[str] = typer.Argument(..., help="Test ids in the control-plane database"),
+    redo: bool = typer.Option(False, help="Rewrite explanations that already exist"),
 ) -> None:
     """Write plain-English explanations for stored incidents (the verdicts are not changed)."""
     from windowsticker.db.session import Database
@@ -411,7 +412,7 @@ def explain_test_cmd(
             settings.require_inference_key(), settings.vultr_inference_base_url
         ) as client:
             for test_id in test_ids:
-                n = await explain_test(db, client, settings.analyst_model, test_id)
+                n = await explain_test(db, client, settings.analyst_model, test_id, redo=redo)
                 console.print(f"{test_id}: {n} explanation(s) written")
         await db.dispose()
 

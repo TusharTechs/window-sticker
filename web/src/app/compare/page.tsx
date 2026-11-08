@@ -1,8 +1,14 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { IntervalBar, StickerCard } from "@/components/StickerCard";
 import { api } from "@/lib/api";
 import { configLabel, per1k, shortDate } from "@/lib/format";
 import type { Sticker, Test } from "@/lib/types";
+
+export const metadata: Metadata = {
+  title: "Compare tests · Window Sticker",
+  description: "A/B two crash tests with Fisher's exact test.",
+};
 
 type Comparison = {
   a: Sticker;

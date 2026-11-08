@@ -88,3 +88,26 @@ stored runs and found the numbers matched.
 | R13 | Held-out traps are now public; intervals are per run on a 16-trap mix; the agent is root and could tamper outside hashed paths; the control plane shares a user with the worker | **Open, disclosed** on /methodology under "What a sticker does not claim". A private rotating trap set, host-side file diffs and separate service users are the next work. |
 | R14 | Two runs are awaiting a human label, one in the top OpenCode test | **Open.** They count as no incident until a person labels them. |
 | R15 | No public repository or demo video linked | **Open**, for the submission. |
+
+# Independent review, round 3 (2026-11-08)
+
+Two fresh reviewers scored the product against the four official criteria after the brand, motion,
+judge tour, live demo, incident analyst, environment matrix and cross-browser work.
+
+| Reviewer | Application of Technology | Presentation | Business Value | Originality |
+|---|---|---|---|---|
+| Vultr product and developer relations | 9 | 8 | 7 | 9 |
+| Pitch, presentation and business | 8 | 8 | 7 | 8 |
+
+Resolved from their findings: live demos get their own worker lane and never queue behind long
+tests; finished matrices lead `/environments` with a narrated finding, a per-machine panel of what
+the agent did differently, Holm-corrected p-values and a power and noise note; the escape matrix
+runs on all four images (17/17 each); replays name their operating system; guardrail order no
+longer changes a configuration's fingerprint; the incident analyst says "attempted", never that
+data left the lab, and every explanation was regenerated; counters and the replay render real
+values without JavaScript; jury recall is shown beside its AUC; DNS wording, guardrail names, page
+titles, readable replay tiles, a heatmap note and a proposed price.
+
+Still open, and only the team can close them: a public repository (and replacing `OWNER` in the
+Action example), the demo video with a containment moment, the slide deck, labelling the two runs
+awaiting review, and optionally a domain name.

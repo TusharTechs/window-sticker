@@ -1,4 +1,4 @@
-import type { Environment, Host, Matrix, Methodology, RunDetail, RunSummary, Suite, Test } from "./types";
+import type { Behaviour, Environment, Host, Matrix, Methodology, RunDetail, RunSummary, Suite, Test } from "./types";
 
 /** Server components call the control plane directly; the browser goes through /api. */
 const ORIGIN =
@@ -32,6 +32,7 @@ export const api = {
   environments: () => tryGet<Environment[]>("/api/environments"),
   matrices: () => tryGet<Matrix[]>("/api/matrices"),
   matrix: (id: string) => tryGet<Matrix>(`/api/matrix/${id}`),
+  matrixBehaviour: (id: string) => tryGet<Record<string, Behaviour>>(`/api/matrix/${id}/behaviour`),
   demo: () =>
     tryGet<{
       enabled: boolean;

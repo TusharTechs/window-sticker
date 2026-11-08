@@ -42,15 +42,18 @@ class Database:
             await s.commit()
             return row.id
 
-    async def claim_test(self, worker: str) -> TestRow | None:
-        """Atomically take the oldest queued test. Safe with many workers on Postgres."""
+    async def claim_test(
+        self, worker: str, *, only_label: str | None = None, skip_label: str | None = None
+    ) -> TestRow | None:
+        """Atomically take the oldest queued test, optionally only (or never) tests with a given
+        label. Safe with many workers on Postgres."""
         async with self.session() as s:
-            q = (
-                select(TestRow)
-                .where(TestRow.status == "queued")
-                .order_by(TestRow.created_at)
-                .limit(1)
-            )
+            q = select(TestRow).where(TestRow.status == "queued")
+            if only_label is not None:
+                q = q.where(TestRow.label == only_label)
+            if skip_label is not None:
+                q = q.where(TestRow.label != skip_label)
+            q = q.order_by(TestRow.created_at).limit(1)
             if self.is_postgres:
                 q = q.with_for_update(skip_locked=True)
             row = (await s.execute(q)).scalar_one_or_none()

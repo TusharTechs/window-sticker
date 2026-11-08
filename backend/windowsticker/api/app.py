@@ -31,6 +31,7 @@ from sqlalchemy import desc, select
 from windowsticker import __version__
 from windowsticker.agents.config import AgentConfig
 from windowsticker.agents.guardrails import PROFILES, GuardrailEngine
+from windowsticker.behaviour import profile as behaviour_profile
 from windowsticker.db.models import EventRow, LabelRow, RunRow, TestRow
 from windowsticker.db.session import Database
 from windowsticker.environments import DEFAULT_ENVIRONMENT, ENVIRONMENTS
@@ -282,13 +283,27 @@ def create_app(
         )
         return data
 
+    def _escape_file(profile: str, environment: str) -> Path | None:
+        here = Path(__file__).parents[1]
+        if profile == "agent":
+            return here / "escape_matrix_agent.json"
+        if profile != "reference":
+            return None
+        if environment == DEFAULT_ENVIRONMENT:
+            return here / "escape_matrix.json"
+        path = here / f"escape_matrix_{environment}.json"
+        return path if path.exists() else None
+
     @app.get("/api/escape-matrix")
-    async def escape_matrix(profile: str = "reference") -> dict[str, Any]:
-        """Measured escape matrix for a sandbox profile: reference, or agent (in-VM agent)."""
-        name = {"reference": "escape_matrix.json", "agent": "escape_matrix_agent.json"}.get(profile)
-        if name is None:
-            raise HTTPException(404, "unknown profile")
-        data: dict[str, Any] = json.loads((Path(__file__).parents[1] / name).read_text())
+    async def escape_matrix(
+        profile: str = "reference", environment: str = DEFAULT_ENVIRONMENT
+    ) -> dict[str, Any]:
+        """Measured escape matrix for a sandbox profile (reference, or agent: in-VM agent),
+        on one of the environments' images."""
+        path = _escape_file(profile, environment)
+        if path is None:
+            raise HTTPException(404, "no escape matrix for that profile and environment")
+        data: dict[str, Any] = json.loads(path.read_text())
         return data
 
     @app.get("/api/methodology")
@@ -326,11 +341,25 @@ def create_app(
 
     # ------------------------------------------------------------ environments
     @app.get("/api/environments")
-    async def environments() -> list[dict[str, str]]:
-        return [
-            {"id": e.id, "image": e.image, "title": e.title, "os": e.os, "notes": e.notes}
-            for e in ENVIRONMENTS.values()
-        ]
+    async def environments() -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for e in ENVIRONMENTS.values():
+            path = _escape_file("reference", e.id)
+            escape = None
+            if path is not None:
+                m = json.loads(path.read_text())
+                escape = {"contained": m["contained"], "total": m["total"], "image": m.get("image")}
+            out.append(
+                {
+                    "id": e.id,
+                    "image": e.image,
+                    "title": e.title,
+                    "os": e.os,
+                    "notes": e.notes,
+                    "escape": escape,
+                }
+            )
+        return out
 
     @app.post("/api/matrix", status_code=201, dependencies=[Depends(require_writer)])
     async def post_matrix(body: CreateMatrix) -> dict[str, Any]:
@@ -393,6 +422,25 @@ def create_app(
                     "changed": ser.significant or anyi.significant,
                 }
             out_rows.append(row)
+        # Several environments and two metrics are compared at once, so p-values are adjusted
+        # with Holm's method before anything is called a change.
+        tests_ = [
+            (r["versus_baseline"], key)
+            for r in out_rows
+            if "versus_baseline" in r
+            for key in ("serious_p", "any_p")
+        ]
+        ranked = sorted(tests_, key=lambda x: x[0][x[1]])
+        running = 0.0
+        for i, (vb, key) in enumerate(ranked):
+            running = max(running, min(1.0, (len(ranked) - i) * vb[key]))
+            vb[key + "_adjusted"] = running
+        for r in out_rows:
+            vb = r.get("versus_baseline")
+            if vb:
+                vb["changed"] = (
+                    min(vb.get("serious_p_adjusted", 1.0), vb.get("any_p_adjusted", 1.0)) < 0.05
+                )
         statuses = {t.status for t in rows}
         return {
             "matrix_id": matrix_id,
@@ -403,6 +451,32 @@ def create_app(
             "created_at": rows[0].created_at.isoformat() if rows[0].created_at else None,
             "tests": out_rows,
         }
+
+    behaviour_cache: dict[str, dict[str, Any]] = {}
+
+    @app.get("/api/matrix/{matrix_id}/behaviour")
+    async def matrix_behaviour(matrix_id: str) -> dict[str, Any]:
+        """Per environment: tools the agent reached for that were missing, and its package moves."""
+        rows = await _matrix_tests(matrix_id)
+        if not rows:
+            raise HTTPException(404, "matrix not found")
+        out: dict[str, Any] = {}
+        for t in rows:
+            if t.id in behaviour_cache:
+                out[t.environment] = behaviour_cache[t.id]
+                continue
+            async with db.session() as s:
+                records = [
+                    r.record
+                    for r in (await s.execute(select(RunRow).where(RunRow.test_id == t.id)))
+                    .scalars()
+                    .all()
+                ]
+            prof = behaviour_profile(records)
+            if t.status == "finished":
+                behaviour_cache[t.id] = prof
+            out[t.environment] = prof
+        return out
 
     @app.get("/api/matrices")
     async def matrices() -> list[dict[str, Any]]:

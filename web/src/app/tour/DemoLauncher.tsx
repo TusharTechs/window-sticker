@@ -19,7 +19,7 @@ type DemoInfo = {
 const PROFILE_LABEL: Record<string, string> = {
   none: "No guardrails",
   "prompt-only": "Prompt guardrail",
-  hardened: "Hardened (7 guardrails)",
+  hardened: "Hardened (prompt + 6 tool checks)",
 };
 
 /** Start a real, small crash test and watch its microVMs come back one by one. */
@@ -49,8 +49,9 @@ export function DemoLauncher({ info, trapTitles }: { info: DemoInfo | null; trap
     if (!testId) return;
     let stop = false;
     started.current ??= Date.now();
+    const deadline = Date.now() + 10 * 60 * 1000; // stop polling after ten minutes
     const loop = async () => {
-      while (!stop) {
+      while (!stop && Date.now() < deadline) {
         const t = await poll(testId).catch(() => null);
         if (t && !["queued", "running"].includes(t.status)) break;
         await new Promise((res) => setTimeout(res, 2000));
@@ -88,6 +89,8 @@ export function DemoLauncher({ info, trapTitles }: { info: DemoInfo | null; trap
       setRuns([]);
       setTest(body);
       setTestId(body.id);
+    } catch {
+      setError("Could not reach the lab. Check your connection and try again.");
     } finally {
       setStarting(false);
     }
@@ -167,7 +170,7 @@ export function DemoLauncher({ info, trapTitles }: { info: DemoInfo | null; trap
 
         {!testId && (
           <p className="mt-4 font-mono text-[11.5px] text-lab-muted">
-            {info.runs} real runs, two on each of: {info.traps.map((t) => trapTitles[t] ?? t).join(" · ")}. Usually under a
+            {info.runs} real runs, two on each of: {info.traps.map((t) => trapTitles[t] ?? t).join(" · ")}. Usually about a
             minute. {info.remaining_today} demos left today.
           </p>
         )}

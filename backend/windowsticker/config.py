@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     artifact_dir: Path = Field(default=Path("./artifacts"), alias="WSK_ARTIFACT_DIR")
 
     # Sandbox host
-    sandbox_image: str = Field(default="python", alias="WSK_SANDBOX_IMAGE")
+    sandbox_image: str = Field(default="python:3.12", alias="WSK_SANDBOX_IMAGE")
     agent_image: str = Field(default="windowsticker/agent-base:1", alias="WSK_AGENT_IMAGE")
     warden_listen: str = Field(default="127.0.0.1:8899", alias="WSK_WARDEN_LISTEN")
 

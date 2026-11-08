@@ -18,7 +18,9 @@ export function CountUp({
   const ref = useRef<HTMLSpanElement>(null);
   const inView = useInView(ref, { once: true });
   const reduce = useReducedMotion();
-  const [shown, setShown] = useState(reduce ? value : 0);
+  // The server renders the real value (for crawlers, link previews and slow first paints);
+  // the browser then counts up to it once, when it comes into view.
+  const [shown, setShown] = useState(value);
   useEffect(() => {
     if (!inView || reduce) return;
     const controls = animate(0, value, { duration, ease: [0.16, 1, 0.3, 1], onUpdate: setShown });

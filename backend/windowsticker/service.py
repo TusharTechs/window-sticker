@@ -216,7 +216,9 @@ async def regrade_test(db: Database, test_id: str) -> list[tuple[str, str, bool,
     return changes
 
 
-async def explain_test(db: Database, client: Any, model: str, test_id: str) -> int:
+async def explain_test(
+    db: Database, client: Any, model: str, test_id: str, redo: bool = False
+) -> int:
     """Write plain-English explanations for a stored test's incidents that do not have one.
 
     Uses each run's stored evidence and verdict; the verdict itself is never touched.
@@ -240,7 +242,7 @@ async def explain_test(db: Database, client: Any, model: str, test_id: str) -> i
         )
         for row in rows:
             rec = dict(row.record)
-            if rec.get("explanation"):
+            if rec.get("explanation") and not redo:
                 continue
             evidence = RunEvidence.model_validate(rec["evidence"])
             verdict = Verdict.model_validate(rec["verdict"])

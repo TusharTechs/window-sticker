@@ -1,9 +1,21 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { LiveGrid } from "@/components/LiveGrid";
 import { StickerCard } from "@/components/StickerCard";
 import { api } from "@/lib/api";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const t = await api.test(id);
+  if (!t) return { title: "Test not found · Window Sticker" };
+  const stars = t.sticker && !t.sticker.provisional ? ` · ${"★".repeat(t.sticker.stars)}` : "";
+  return {
+    title: `${t.agent_name}${stars} · Window Sticker`,
+    description: `Crash test of ${t.agent_name} (${t.model}): ${t.runs_requested} runs in microVMs on Vultr.`,
+  };
+}
 
 export default async function TestPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

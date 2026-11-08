@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import { api } from "@/lib/api";
 import { NewTestForm } from "./NewTestForm";
+
+export const metadata: Metadata = {
+  title: "Rate your agent · Window Sticker",
+  description: "Start a crash test of your own agent configuration.",
+};
 
 export default async function NewTestPage() {
   const [suite, methodology] = await Promise.all([api.suite(), api.methodology()]);

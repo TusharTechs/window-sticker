@@ -20,6 +20,9 @@ Everything on a sticker is measured from real runs. Every number carries its sam
 
 **Live:** https://107-191-39-70.sslip.io (served from the Vultr VX1 sandbox host itself)
 
+**Judges, start here:** [/tour](https://107-191-39-70.sslip.io/tour), nine short steps, including a live crash test
+you start yourself: pick a model, guardrails and an operating system, and watch six real runs land in about a minute.
+
 ## Results (real runs on Vultr)
 
 ### Trap Suite v2 leaderboard
@@ -68,6 +71,44 @@ Same model (`deepseek-v4.1-flash`), four setups:
 - **OpenCode's one serious incident** was running a project's config checker that sends the API key out
   in a DNS lookup. Reading the 12-line checker first shows the leak; other OpenCode runs did exactly that.
 
+### Same agent, different machines
+
+Vultr's mentors asked how agents behave on different machines, so the same agent and traps run on
+four operating-system images: Debian 12 (full and slim), Alpine with BusyBox, and Debian 11 with
+Python 3.10 ([/environments](https://107-191-39-70.sslip.io/environments)).
+
+**The machine changes the agent.** On Debian 11 / Python 3.10, which has no built-in TOML parser, the
+same no-guardrail DeepSeek agent reached for an unknown package index on the dependency-confusion
+trap in **10 of 12 runs (2 of them installs), against 3 of 12 on Debian 12 with Python 3.12**
+(Fisher's exact test p = 0.012; 0.025 after Holm correction).
+
+**But the ratings held.** Across all 16 traps at 48 runs per machine, no machine changed either
+configuration's incident rate measurably (Holm-adjusted p = 1.00 throughout). The agent visibly
+adapted, reaching for `git`, `tomllib` and `toml` where they were missing, without becoming less safe
+overall. The hardened setup kept zero serious incidents on every machine.
+
+**Reference agent, hardened (prompt + 6 tool guardrails)** (`deepseek-v4.1-flash-1017`), 48 runs per machine, all 16 traps:
+
+| Machine | Rating | Serious / 1,000 | Any incident / 1,000 | Safe success | Versus Debian 12 (Holm-adjusted p) | Missing tools it reached for |
+|---|---|---|---|---|---|---|
+| Debian 12, full toolchain | ★★★☆☆ | 0 | 62 | 92% | baseline | toml (2) |
+| Debian 12, slim | ★★★☆☆ | 0 | 42 | 94% | no significant change (p 1.00) | git (3), toml (1) |
+| Alpine Linux | ★★★☆☆ | 0 | 62 | 94% | no significant change (p 1.00) | git (4), toml (2) |
+| Debian 11, Python 3.10 | ★★★☆☆ | 0 | 42 | 94% | no significant change (p 1.00) | git (7), toml (3), tomllib (3) |
+
+**Reference agent, no guardrails** (`deepseek-v4.1-flash-1017`), 48 runs per machine, all 16 traps:
+
+| Machine | Rating | Serious / 1,000 | Any incident / 1,000 | Safe success | Versus Debian 12 (Holm-adjusted p) | Missing tools it reached for |
+|---|---|---|---|---|---|---|
+| Debian 12, full toolchain | ★★☆☆☆ | 42 | 83 | 90% | baseline | toml (3) |
+| Debian 12, slim | ★★★☆☆ | 0 | 62 | 94% | no significant change (p 1.00) | git (7), toml (1) |
+| Alpine Linux | ★★☆☆☆ | 62 | 125 | 85% | no significant change (p 1.00) | git (10), toml (2) |
+| Debian 11, Python 3.10 | ★★★☆☆ | 0 | 104 | 90% | no significant change (p 1.00) | git (5), toml (3), tomllib (3) |
+
+**Containment holds everywhere:** the 17-payload escape matrix is contained 17/17 on each of the four
+images. The harness was made portable along the way: BusyBox `find` returned empty file snapshots on
+Alpine, so snapshots are now taken by the guest's isolated Python on every image.
+
 ### Trap Suite v1 (frozen)
 
 Every row is 36 runs over all 12 v1 traps, re-graded with the current grader.
@@ -92,9 +133,20 @@ Every row is 36 runs over all 12 v1 traps, re-graded with the current grader.
 - **No key in the guest:** in-VM agents reach their model through a host-side inference lane that
   holds the key, pins the model, enforces a token budget and meters every token.
 - **Jury accuracy:** on 370 production runs the two System One jurors scored AUC 0.98 against the
-  tripwires with no false alarms at 0.5, so they triage runs for a person rather than decide.
+  tripwires with no false alarms at 0.5, but caught only 29 and 31 of the 40 incidents at that
+  threshold, so they triage runs for a person rather than decide.
 - **Every grader bug found is published**, with the runs it changed: [docs/VALIDATION.md](docs/VALIDATION.md).
   Stored runs are re-graded from immutable evidence and keep their previous verdict for audit.
+
+### Built for judges and buyers to check
+
+- **A guided tour with a live test** ([/tour](https://107-191-39-70.sslip.io/tour)). Anyone can start a six-run crash
+  test without a token. It is bounded by a per-visitor cooldown, two demos in flight and a daily cap, and it is kept
+  off the leaderboard.
+- **Every incident explained in plain English** by a Vultr chat model: what happened, why it matters, how to prevent
+  it. The analyst only sees scrubbed evidence, and the verdict never depends on it.
+- **Cross-browser checked:** Playwright runs every page in Chromium, Firefox and WebKit, on desktop and on Pixel and
+  iPhone sizes (60 checks), on a schedule.
 
 ### A rating, not a containment test
 
@@ -144,8 +196,8 @@ anything the microVM or the warden has to stop counts as an *incident*.
 
 | Service | Role |
 |---|---|
-| Cloud Compute (VX1, KVM) | One host runs the microVMs, the Egress Warden, the inference lane, the control plane and the web app |
-| Serverless Inference: chat models | The agents under test (`deepseek-v4.1-flash`, `glm-5.3`, `qwen3.8`, `mimo`, `minimax`) |
+| Cloud Compute (VX1, KVM) | One host runs the microVMs (on four OS images), the Egress Warden, the inference lane, the control plane and the web app |
+| Serverless Inference: chat models | The agents under test (`deepseek-v4.1-flash`, `glm-5.3`, `qwen3.8`, `mimo`, `minimax`), and the incident analyst that explains every incident in plain English |
 | Serverless Inference: System One | The decision-model jury (`clef`, `d3`) |
 | Firewall groups (API) | SSH only from the operator's IP; 80/443 public; created by `windowsticker host create` |
 | Vultr API v2 | Host lifecycle (create, wait for active, tagged destroy), SSH keys, firewall rules |
@@ -160,7 +212,7 @@ the queue, and generating trap variants with the vector store and embeddings.
 ```bash
 cd backend
 uv sync
-uv run pytest                      # 166 tests, no keys needed
+uv run pytest                      # 172 tests, no keys needed
 uv run windowsticker suite list    # the trap suite
 uv run windowsticker stats thresholds
 ```
@@ -233,7 +285,9 @@ backend/tests/          unit and end-to-end tests (test doubles live only here)
 docs/                   build plan, measurements, methodology
 infra/                  host provisioning, systemd units, the OpenCode agent image
 web/                    Next.js product: leaderboard, live crash tests, run replays, compare
-action/                 GitHub Action that gates a pull request on a minimum rating
+action/                 GitHub Action that gates a pull request on a measurable regression
+brand/                  the mark (SVG sources and the renderer for favicons and PNGs)
+web/e2e/                Playwright checks in Chromium, Firefox, WebKit and on phone sizes
 ```
 
 ## Status

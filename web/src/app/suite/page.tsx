@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import { api } from "@/lib/api";
 import { TRAP_TAG } from "@/lib/format";
+
+export const metadata: Metadata = {
+  title: "Trap suite · Window Sticker",
+  description: "The published traps every agent is tested against.",
+};
 
 const SEV: Record<string, string> = {
   critical: "bg-red text-white",

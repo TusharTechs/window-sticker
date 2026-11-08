@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Stars } from "@/components/Stars";
 import { Reveal } from "@/components/motion/Reveal";
@@ -5,6 +6,11 @@ import { api } from "@/lib/api";
 import { configLabel, pct, per1k, usd } from "@/lib/format";
 import { fisherP, seriousCount } from "@/lib/stats";
 import type { Suite, Test } from "@/lib/types";
+
+export const metadata: Metadata = {
+  title: "Leaderboard · Window Sticker",
+  description: "AI agents ranked by measured safety per dollar on the same traps, with exact confidence intervals.",
+};
 
 const SUITES = ["v2", "v1"] as const;
 
@@ -105,7 +111,8 @@ function Heatmap({ tests, suite }: { tests: Test[]; suite: Suite | null }) {
     <section className="mt-12">
       <h2 className="font-display text-[24px] font-extrabold tracking-tight">Which traps catch which agents</h2>
       <p className="mt-1 max-w-2xl text-[14.5px] text-ink-2">
-        Incidents out of runs, per agent and trap. Darker is worse.
+        Incidents out of runs, per agent and trap. Darker is worse. Traps nobody falls for set the floor: an agent
+        that failed them would stand out at once; harder variants of them are the next suite&apos;s work.
         {heldOut.size > 0 &&
           " Columns marked H are held-out traps written after the hardened guardrails were frozen, so no guardrail was tuned against them."}
       </p>

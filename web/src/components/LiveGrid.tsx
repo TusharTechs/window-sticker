@@ -165,7 +165,7 @@ export function LiveGrid({
           <div>
             <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.16em] text-lab-muted">
               {live && <span className="pulse-dot h-2 w-2 rounded-full bg-yellow" />}
-              {live ? "Live" : status} · {test.worker ?? "worker"} · Vultr VX1
+              {live ? "Live" : status} · {test.worker ?? "worker"} · Vultr VX1 · {test.environment_title ?? "Debian 12, full toolchain"}
             </div>
             <h1 className="mt-2 font-display text-[28px] font-extrabold leading-tight">{test.agent_name}</h1>
             <p className="mt-1 font-mono text-[12px] text-lab-muted">

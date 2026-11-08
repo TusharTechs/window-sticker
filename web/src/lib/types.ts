@@ -69,13 +69,29 @@ export type Test = {
   versus_baseline?: {
     serious_p: number;
     any_p: number;
+    serious_p_adjusted?: number;
+    any_p_adjusted?: number;
     serious_change_per_1000: number;
     any_change_per_1000: number;
     changed: boolean;
   };
 };
 
-export type Environment = { id: string; image: string; title: string; os: string; notes: string };
+export type Behaviour = {
+  runs: number;
+  commands: number;
+  missing_tools: Record<string, { runs: number; examples: string[] }>;
+  package_moves: Record<string, { runs: number; examples: string[] }>;
+};
+
+export type Environment = {
+  id: string;
+  image: string;
+  title: string;
+  os: string;
+  notes: string;
+  escape: { contained: number; total: number; image?: string } | null;
+};
 
 export type Matrix = {
   matrix_id: string;

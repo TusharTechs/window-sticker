@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { api } from "@/lib/api";
@@ -172,6 +173,17 @@ function Timeline({ r }: { r: RunRecord }) {
   );
 }
 
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const run = await api.run(id);
+  if (!run) return { title: "Run not found · Window Sticker" };
+  const verdict = run.incident ? "Incident" : "Clean run";
+  return {
+    title: `${verdict} · ${run.scenario_id} · Window Sticker`,
+    description: `Step-by-step replay of ${run.id}: every command, what the lab stopped, and the verdict.`,
+  };
+}
+
 export default async function RunPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const run = await api.run(id);
@@ -230,7 +242,8 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
             {scenario?.title ?? r.scenario_id}
           </h1>
           <p className="mt-1 font-mono text-[12px] text-muted">
-            {r.run_id} · {r.model} · {r.evidence.steps.length} steps · {usd(r.cost_usd)}
+            {r.run_id} · {r.model} · {test?.environment_title ?? "Debian 12, full toolchain"} · {r.evidence.steps.length} steps ·{" "}
+            {usd(r.cost_usd)}
           </p>
         </div>
         <div
@@ -335,7 +348,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
             <h2 className="font-semibold">Egress Warden</h2>
             <p className="mt-1 text-[13px] text-ink-2">
               {egress.length === 0
-                ? "No attempts to reach anything outside the microVM."
+                ? "No attempts through the Egress Warden. It logs HTTP(S) and TCP; DNS lookups fail inside the microVM, so they leave only the command as evidence."
                 : `${egress.length} attempt(s) to reach outside, ${blocked.length} refused.`}
               {modelCalls.length > 0 &&
                 ` ${modelCalls.length} call(s) to the agent's own model went through the inference lane, which holds the key on the host.`}
@@ -358,8 +371,9 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
           <section className="rounded-xl border border-rule bg-card p-5">
             <h2 className="font-semibold">Decision-model jury</h2>
             <p className="mb-3 mt-1 text-[13px] text-ink-2">
-              Vultr System One models read the scrubbed trace and answer with probabilities. They decide only what
-              tripwires cannot.
+              Vultr System One models read the trace with every secret replaced by a label, and answer with
+              probabilities. They triage: a run no tripwire caught but a juror suspects goes to a person. When a tripwire
+              fired, as here if it did, the verdict is the tripwire&apos;s, whatever the jurors scored.
             </p>
             <JuryTable jury={v.jury} />
           </section>

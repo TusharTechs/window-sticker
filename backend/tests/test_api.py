@@ -357,3 +357,71 @@ async def test_environment_matrix_runs_each_environment_and_compares_to_baseline
         assert any(x["matrix_id"] == mid for x in http.get("/api/matrices").json())
         # Cross-environment tests stay off the leaderboard.
         assert http.get("/api/leaderboard?suite=v2").json() == []
+
+
+async def test_live_demos_get_their_own_lane(db):
+    """A demo queued behind a long test is claimed by the demo lane straight away."""
+    from windowsticker.agents.config import AgentConfig
+    from windowsticker.service import create_test
+
+    await db.create_all()
+    agent = AgentConfig(name="A", model="deepseek-v4.1-flash-1017")
+    long_test = await create_test(db, agent, 48)
+    demo = await create_test(db, agent, 6, scenarios=["pip-conf-index"], label="Live demo")
+    assert (await db.claim_test("w", only_label="Live demo")).id == demo.id
+    assert (await db.claim_test("w", skip_label="Live demo")).id == long_test.id
+    assert await db.claim_test("w", only_label="Live demo") is None
+
+
+def test_guardrail_order_does_not_change_the_configuration():
+    from windowsticker.agents.config import AgentConfig
+
+    a = AgentConfig(
+        name="A", model="m", guardrails=["no_pipe_to_shell", "untrusted_content_prompt"]
+    )
+    b = AgentConfig(
+        name="B", model="m", guardrails=["untrusted_content_prompt", "no_pipe_to_shell"]
+    )
+    assert a.fingerprint() == b.fingerprint()
+
+
+def test_behaviour_profile_finds_missing_tools_and_package_moves():
+    from windowsticker.behaviour import profile
+
+    records = [
+        {
+            "run_id": "r1",
+            "evidence": {
+                "commands": [
+                    {"command": "git status", "stdout": "", "stderr": "sh: git: not found"},
+                    {
+                        "command": "pip download toml-fast --index-url https://x.test/simple",
+                        "stdout": "",
+                        "stderr": "",
+                    },
+                    {"command": 'read_file {"path": "pip install x"}', "stdout": "", "stderr": ""},
+                ]
+            },
+        },
+        {
+            "run_id": "r2",
+            "evidence": {
+                "commands": [
+                    {
+                        "command": "python -c 'import tomllib'",
+                        "stdout": "",
+                        "stderr": "ModuleNotFoundError: No module named 'tomllib'",
+                    }
+                ]
+            },
+        },
+    ]
+    p = profile(records)
+    assert p["missing_tools"]["git"]["runs"] == 1 and p["missing_tools"]["tomllib"]["examples"] == [
+        "r2"
+    ]
+    assert p["package_moves"]["downloaded a package"]["runs"] == 1
+    assert p["package_moves"]["named a non-default index"]["runs"] == 1
+    assert (
+        "installed a package" not in p["package_moves"]
+    )  # a file tool naming pip is not a command

@@ -1,5 +1,11 @@
+import type { Metadata } from "next";
 import { api } from "@/lib/api";
 import { GUARDRAIL_LABEL } from "@/lib/format";
+
+export const metadata: Metadata = {
+  title: "Methodology · Window Sticker",
+  description: "How runs are contained, graded and turned into a rating, and what a sticker does not claim.",
+};
 
 type Measurements = {
   updated: string;

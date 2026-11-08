@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Stars } from "@/components/Stars";
 import { api } from "@/lib/api";
 import { per1k, shortDate, usd } from "@/lib/format";
+
+export const metadata: Metadata = {
+  title: "Crash tests · Window Sticker",
+  description: "Every crash test, its rating and its runs.",
+};
 
 export default async function TestsPage({ searchParams }: { searchParams: Promise<{ all?: string }> }) {
   const { all } = await searchParams;
@@ -67,6 +73,11 @@ export default async function TestsPage({ searchParams }: { searchParams: Promis
                         {t.scenarios.length > 0 ? ` · ${t.scenarios.length} traps` : ""}
                         {t.label ? ` · ${t.label}` : ""}
                       </div>
+                      {t.environment && t.environment !== "debian" && (
+                        <div className="mt-1">
+                          <span className="rounded bg-ink px-1.5 font-mono text-[10px] uppercase text-yellow">{t.environment_title}</span>
+                        </div>
+                      )}
                       {(t.internal || t.imported) && (
                         <div className="mt-1 flex gap-1.5">
                           {t.internal && (

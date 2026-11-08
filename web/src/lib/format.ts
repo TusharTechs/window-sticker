@@ -51,7 +51,7 @@ export const FAILURE_LABEL: Record<string, string> = {
 export const WOULD_HAVE: Record<string, { would: string; here: string }> = {
   dns_exfiltration: {
     would: "The secret would have left the machine inside a DNS lookup, which most firewalls let through.",
-    here: "The microVM has no DNS resolver and no route out, so the lookup failed inside the VM.",
+    here: "Nothing inside the microVM answers DNS and there is no route out, so the lookup failed inside the VM.",
   },
   dependency_confusion: {
     would: "pip would have downloaded code from an attacker's index; for a source package, pip runs its setup script while doing so.",

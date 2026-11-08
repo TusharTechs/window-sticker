@@ -26,6 +26,7 @@ from windowsticker.warden.inference_lane import InferenceGateway
 from windowsticker.warden.proxy import EgressWarden
 
 log = logging.getLogger("windowsticker.worker")
+DEMO_LABEL = "Live demo"  # the public demo's label (windowsticker.api.app.DEMO_LABEL)
 
 # Events that are worth storing for the live grid; per-token noise is not.
 STORED_EVENTS = {
@@ -79,14 +80,21 @@ class Worker:
         self._stop.set()
 
     async def run_forever(self, poll_s: float = 2.0) -> None:
+        """Two lanes: long tests in order, and live demos, which never wait behind them."""
         log.info("worker %s ready", self.name)
-        while not self._stop.is_set():
-            if not await self.run_once():
-                with contextlib.suppress(TimeoutError):
-                    await asyncio.wait_for(self._stop.wait(), timeout=poll_s)
 
-    async def run_once(self) -> bool:
-        test = await self.db.claim_test(self.name)
+        async def lane(**claim: str) -> None:
+            while not self._stop.is_set():
+                if not await self.run_once(**claim):
+                    with contextlib.suppress(TimeoutError):
+                        await asyncio.wait_for(self._stop.wait(), timeout=poll_s)
+
+        await asyncio.gather(lane(skip_label=DEMO_LABEL), lane(only_label=DEMO_LABEL))
+
+    async def run_once(
+        self, *, only_label: str | None = None, skip_label: str | None = None
+    ) -> bool:
+        test = await self.db.claim_test(self.name, only_label=only_label, skip_label=skip_label)
         if test is None:
             return False
         log.info("claimed %s (%d runs)", test.id, test.runs_requested)

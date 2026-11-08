@@ -21,7 +21,7 @@ export function TourNav({ steps }: { steps: { id: string; title: string }[] }) {
   }, [steps]);
   const index = steps.findIndex((s) => s.id === active);
   return (
-    <nav aria-label="Tour steps" className="sticky top-20 hidden lg:block">
+    <nav aria-label="Tour steps" className="sticky top-20 hidden self-start lg:block">
       <div className="font-mono text-[10.5px] uppercase tracking-[0.16em] text-muted">Judge tour · {index + 1}/{steps.length}</div>
       <ol className="mt-3 space-y-1 border-l-2 border-rule">
         {steps.map((s, i) => (

@@ -4,6 +4,7 @@ import { StickerCard } from "@/components/StickerCard";
 import { CountUp } from "@/components/motion/CountUp";
 import { LabReplay, type ReplayTest } from "@/components/motion/LabReplay";
 import { Reveal } from "@/components/motion/Reveal";
+import { environmentFinding } from "@/lib/environments";
 import { TiltCard } from "@/components/motion/TiltCard";
 import { api } from "@/lib/api";
 import { TRAP_TAG, seconds, usd } from "@/lib/format";
@@ -94,7 +95,14 @@ function replayOf(t: Test, runs: RunSummary[] | null, suite: Suite | null, label
 }
 
 export default async function Home() {
-  const [v2, v1, suite, host] = await Promise.all([api.leaderboard("v2"), api.leaderboard("v1"), api.suite(), api.host()]);
+  const [v2, v1, suite, host, matrices] = await Promise.all([
+    api.leaderboard("v2"),
+    api.leaderboard("v1"),
+    api.suite(),
+    api.host(),
+    api.matrices(),
+  ]);
+  const envFinding = environmentFinding(matrices, suite);
   const board = v2 && v2.length >= 2 ? v2 : (v1 ?? []);
   const suiteName = v2 && v2.length >= 2 ? "v2" : "v1";
   const best = board[0] ?? null;
@@ -266,6 +274,22 @@ export default async function Home() {
               </tbody>
             </table>
           </div>
+          {envFinding && (
+            <Link
+              href="/environments"
+              className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border-2 border-ink bg-yellow p-5 transition hover:-translate-y-0.5"
+            >
+              <span className="font-display text-[34px] font-extrabold leading-none tabular">
+                {envFinding.k}/{envFinding.n}
+              </span>
+              <span className="min-w-0 flex-1 text-[15px] text-yellow-ink">
+                <strong className="text-ink">The machine changes the agent.</strong> On {envFinding.env}, the same agent fell for
+                &ldquo;{envFinding.trap}&rdquo; in {envFinding.k} of {envFinding.n} runs, against {envFinding.k0} of {envFinding.n0} on
+                Debian 12 (adjusted p {envFinding.pAdjusted.toFixed(3)}). Its rating held elsewhere.
+              </span>
+              <span className="font-mono text-[12px] font-semibold text-ink underline underline-offset-4">Environments →</span>
+            </Link>
+          )}
           <p className="mt-3 font-mono text-[11.5px] text-muted">
             Held-out traps: {heldOut.size} of {suite?.scenarios.length}. Package-index incidents are graded by what happened:
             contact is logged, a download is an incident, only an install is serious.
@@ -294,8 +318,8 @@ export default async function Home() {
             },
             {
               k: "How it makes money (hypothesis)",
-              v: "Free CLI, paid ratings",
-              note: "The engine, trap format and badge are open source. Hosted, published ratings are paid per sticker; vendors pay for certification runs on a private trap set.",
+              v: "Free CLI · $49 per published sticker",
+              note: "Proposed: the engine, trap format and badge are open source; a hosted, published rating is $49 (it costs under $1 to produce); CI gating $199 per agent per month; certification on a private trap set for vendors.",
             },
             {
               k: "Recurring",
@@ -377,11 +401,11 @@ export default async function Home() {
             {[
               ["Sandbox host", host ? `Vultr ${host.plan} · ${host.region}` : "Vultr VX1"],
               ["Isolation", "microVM per run, own kernel"],
-              ["Escape matrix", "17/17 and 22/22 contained"],
+              ["Escape matrix", "17/17 on all 4 OS images; 22/22 in-VM"],
               ["Environments", "Debian, slim Debian, Alpine, Python 3.10"],
               ["Models compared", `${models} from Serverless Inference`],
               ["Throughput", rates.length ? `${Math.round(rates[0] / 10) * 10}–${Math.round(rates[rates.length - 1] / 10) * 10} runs per host-hour` : "n/a"],
-              ["Jury", "clef + d3, AUC 0.98 vs tripwires"],
+              ["Jury (triage)", "clef + d3: AUC 0.98, 29–31 of 40 caught at 0.5"],
               ["Host price", host ? `${usd(host.hourly_usd)} / hour` : ""],
             ].map(([k, v]) => (
               <div key={k} className="bg-card p-4">

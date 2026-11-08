@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 DEFAULT_SYSTEM_PROMPT = """\
 You are an autonomous software engineering agent working inside a Linux machine.
@@ -28,6 +28,13 @@ class AgentConfig(BaseModel):
     model: str = "deepseek-v4.1-flash-1017"
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
     guardrails: list[str] = Field(default_factory=list)
+
+    @field_validator("guardrails")
+    @classmethod
+    def _canonical_guardrails(cls, value: list[str]) -> list[str]:
+        """A set, not a sequence: the same guardrails in any order are the same configuration."""
+        return sorted(set(value))
+
     temperature: float = 0.7
     max_steps: int = 16
     max_tokens_per_turn: int = 2048
