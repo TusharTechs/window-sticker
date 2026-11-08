@@ -2,6 +2,7 @@ import { Stars } from "./Stars";
 import { TargetMark } from "./Logo";
 import type { Range, Sticker } from "@/lib/types";
 import { FAILURE_LABEL, GUARDRAIL_LABEL, pct, per1k, shortDate, usd } from "@/lib/format";
+import { maxStarsFor } from "@/lib/stats";
 
 /** A point estimate with its confidence interval, drawn on a 0..max scale. */
 export function IntervalBar({
@@ -91,7 +92,7 @@ export function StickerCard({ s, compact = false }: { s: Sticker; compact?: bool
         </div>
       </div>
 
-      <div className="grid border-b border-rule sm:grid-cols-[1fr_1.2fr]">
+      <div className="grid border-b border-rule sm:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <div className="border-b border-rule px-5 py-5 sm:border-b-0 sm:border-r">
           <div className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">
             Safety rating
@@ -100,6 +101,12 @@ export function StickerCard({ s, compact = false }: { s: Sticker; compact?: bool
             <Stars stars={s.stars} provisional={s.provisional} size={30} />
           </div>
           <p className="mt-3 text-[13px] leading-snug text-ink-2">{s.rating_reason}</p>
+          {!s.provisional && (
+            <p className="mt-2 font-mono text-[11px] text-muted">
+              Stars are earned by evidence: {s.runs} runs can earn at most {"★".repeat(maxStarsFor(s.runs))}
+              {maxStarsFor(s.runs) < 5 && ` (${maxStarsFor(s.runs) === 3 ? "72" : "183"} clean runs for more)`}.
+            </p>
+          )}
         </div>
         <div className="px-5 py-5">
           <div className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">
@@ -141,8 +148,20 @@ export function StickerCard({ s, compact = false }: { s: Sticker; compact?: bool
           value={pct(s.task_success.point)}
           sub={`CI ${pct(s.task_success.lower)}–${pct(s.task_success.upper)}`}
         />
-        <Cell label="Cost / safe success" value={usd(s.cost_per_success_usd)} sub="measured inference" />
-        <Cell label="Test cost" value={usd(s.total_cost_usd)} sub={`${s.runs} graded runs`} />
+        <Cell
+          label="Per 1,000 safe tasks"
+          value={s.cost_per_success_usd == null ? "n/a" : usd(s.cost_per_success_usd * 1000)}
+          sub="inference, host-metered"
+        />
+        {s.all_in_cost_usd != null ? (
+          <Cell
+            label="Whole test, all-in"
+            value={usd(s.all_in_cost_usd)}
+            sub={`inference ${usd(s.total_cost_usd)} + VX1 ${usd(s.compute_cost_usd)}`}
+          />
+        ) : (
+          <Cell label="Test inference" value={usd(s.total_cost_usd)} sub={`${s.runs} graded runs`} />
+        )}
       </div>
 
       {!compact && (
@@ -155,7 +174,7 @@ export function StickerCard({ s, compact = false }: { s: Sticker; compact?: bool
             {s.breakdown.map((b) => {
               const frac = b.runs ? b.incidents / b.runs : 0;
               return (
-                <li key={b.scenario} className="grid grid-cols-[1fr_120px_52px] items-center gap-3 text-[13px]">
+                <li key={b.scenario} className="grid grid-cols-[minmax(0,1fr)_120px_52px] items-center gap-3 text-[13px]">
                   <span className="truncate" title={b.title}>
                     {b.title}
                   </span>

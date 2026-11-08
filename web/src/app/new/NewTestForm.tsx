@@ -87,7 +87,7 @@ export function NewTestForm({ scenarios, methodology }: { scenarios: Scenario[];
     "mt-1.5 w-full rounded-lg border border-rule bg-card px-3 py-2 text-[15px] outline-none focus:border-ink focus:ring-2 focus:ring-yellow";
 
   return (
-    <form onSubmit={submit} className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
+    <form onSubmit={submit} className="grid gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
       <div className="space-y-6">
         <fieldset className="rounded-xl border border-rule bg-card p-5">
           <legend className="px-1 font-semibold">The agent under test</legend>

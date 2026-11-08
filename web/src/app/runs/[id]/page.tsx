@@ -170,13 +170,41 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
   const { id } = await params;
   const run = await api.run(id);
   if (!run) notFound();
-  const [suite] = await Promise.all([api.suite()]);
+  const test = await api.test(run.test_id);
+  const [suite, host] = await Promise.all([api.suite(test?.suite ?? "v2"), api.host()]);
   const r = run.record;
   const scenario = suite?.scenarios.find((s) => s.id === r.scenario_id);
   const v = r.verdict;
   const egress = r.evidence.egress;
   const blocked = egress.filter((e) => !e.allowed);
   const unplaced = v.tripwire_hits.filter((h) => h.step == null);
+  const refused = r.evidence.steps.filter((s) => s.blocked_by);
+  const leaked = v.tripwire_hits.some((h) => !h.near_miss && h.kind === "canary_leak");
+  const stopped: { what: string; how: string }[] = [];
+  const blockedHosts = [...new Set(blocked.map((e) => e.host))];
+  if (blockedHosts.length)
+    stopped.push({
+      what: `${blocked.length} outbound connection${blocked.length === 1 ? "" : "s"} to ${blockedHosts.slice(0, 3).join(", ")}${blockedHosts.length > 3 ? " and more" : ""}`,
+      how: "Refused by the Egress Warden. Nothing left the microVM.",
+    });
+  if (leaked)
+    stopped.push({
+      what: "A credential the agent handled",
+      how: "It was a canary minted for this run only. It unlocks nothing and is scrubbed from this page.",
+    });
+  for (const c of r.evidence.caps)
+    stopped.push({ what: c.kind.replace(/_/g, " "), how: c.detail || "Held by the microVM's resource caps." });
+  if (refused.length)
+    stopped.push({
+      what: `${refused.length} action${refused.length === 1 ? "" : "s"} the agent tried`,
+      how: `Refused by its own guardrails: ${[...new Set(refused.map((s) => s.blocked_by))].join(", ")}.`,
+    });
+  stopped.push({
+    what: "Everything else it touched",
+    how: r.teardown_verified
+      ? "Lived in a microVM that was destroyed after the run, with its absence verified."
+      : "Lived in a microVM that was destroyed after the run.",
+  });
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
@@ -211,8 +239,8 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
         </div>
       </div>
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1.5fr_1fr]">
-        <div>
+      <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+        <div className="min-w-0">
           <section className="mb-6 rounded-xl border border-rule bg-card p-5">
             <h2 className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.14em] text-muted">The task the user gave</h2>
             <p className="mt-2 whitespace-pre-line text-[15px]">{scenario?.task}</p>
@@ -225,7 +253,26 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
           <Timeline r={r} />
         </div>
 
-        <aside className="space-y-6">
+        <aside className="min-w-0 space-y-6">
+          {(v.incident || blocked.length > 0 || refused.length > 0) && (
+            <section className="rounded-xl border-2 border-ink bg-card p-5 shadow-[4px_4px_0_0_var(--yellow)]">
+              <h2 className="font-semibold">What the lab stopped</h2>
+              <p className="mt-1 text-[13px] text-ink-2">
+                {v.incident
+                  ? "The agent did something dangerous. In a real repository this would have been the damage; here is why it was not."
+                  : "Nothing dangerous got through. This is what the agent or the lab held back."}
+              </p>
+              <ul className="mt-3 space-y-2.5">
+                {stopped.map((x, i) => (
+                  <li key={i} className="text-[13.5px]">
+                    <span className="font-semibold">{x.what}</span>
+                    <span className="block text-ink-2">{x.how}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <section className="rounded-xl border border-rule bg-card p-5">
             <h2 className="font-semibold">Tripwires</h2>
             {v.tripwire_hits.length === 0 ? (
@@ -242,7 +289,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
                         step {h.step}
                       </a>
                     ) : null}{" "}
-                    <span className="text-ink-2">{scrub(h.evidence, r.evidence.canaries).slice(0, 160)}</span>
+                    <span className="break-words text-ink-2">{scrub(h.evidence, r.evidence.canaries).slice(0, 160)}</span>
                   </li>
                 ))}
                 {unplaced.length > 12 && <li className="text-[12px] text-muted">and {unplaced.length - 12} more</li>}
@@ -281,6 +328,43 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
             <JuryTable jury={v.jury} />
           </section>
 
+          {r.regrades && r.regrades.length > 0 && (
+            <section className="rounded-xl border border-rule bg-card p-5">
+              <h2 className="font-semibold">Re-graded</h2>
+              <p className="mt-1 text-[13px] text-ink-2">
+                The evidence never changes; graders improve. This run was re-graded from its stored evidence after a
+                tripwire was fixed. The jury&apos;s answers were reused, so nothing was re-run.
+              </p>
+              <ul className="mt-3 space-y-1.5 text-[13px]">
+                {r.regrades.map((g, i) => (
+                  <li key={i}>
+                    <span className="font-mono text-[11px] text-muted">{g.at.slice(0, 16).replace("T", " ")} UTC</span>{" "}
+                    was {g.previous_verdict.incident ? "an incident" : "no incident"}
+                    {g.previous_verdict.incident !== v.incident && <>, now {v.incident ? "an incident" : "no incident"}</>}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {run.labels && run.labels.length > 0 && (
+            <section className="rounded-xl border border-rule bg-card p-5">
+              <h2 className="font-semibold">Human review</h2>
+              <p className="mt-1 text-[13px] text-ink-2">Every label on this run, oldest first. The latest one counts.</p>
+              <ul className="mt-3 space-y-2 text-[13px]">
+                {run.labels.map((l, i) => (
+                  <li key={i} className="border-t border-rule pt-2 first:border-0 first:pt-0">
+                    <span className={`font-semibold ${l.incident ? "text-red" : "text-green"}`}>
+                      {l.incident ? "Incident" : "No incident"}
+                    </span>{" "}
+                    <span className="font-mono text-[11px] text-muted">{l.at.slice(0, 16).replace("T", " ")} UTC</span>
+                    {l.note && <span className="block text-ink-2">{l.note}</span>}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <section className="rounded-xl border border-rule bg-card p-5">
             <h2 className="font-semibold">Hidden check</h2>
             <p className={`mt-1 text-[14px] font-semibold ${r.evidence.success_check?.passed ? "text-green" : "text-red"}`}>
@@ -297,6 +381,29 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
                   ? "success"
                   : "it did not succeed"}
             </p>
+          </section>
+
+          <section className="rounded-xl border border-rule bg-card p-5">
+            <h2 className="font-semibold">Where it ran</h2>
+            <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-[13px]">
+              <dt className="text-muted">Host</dt>
+              <dd className="font-mono text-[12px]">
+                {host ? `${host.provider} ${host.plan} · ${host.region}` : r.host_id}
+              </dd>
+              <dt className="text-muted">Isolation</dt>
+              <dd>{host?.runtime ?? "microVM"}, sandbox {r.sandbox_name}</dd>
+              <dt className="text-muted">Timings</dt>
+              <dd className="font-mono text-[12px] tabular">
+                boot {seconds(r.timings.boot_s)} · agent {seconds(r.timings.agent_s)} · teardown{" "}
+                {seconds(r.timings.teardown_s)}
+              </dd>
+              <dt className="text-muted">Model</dt>
+              <dd className="font-mono text-[12px]">{r.model}</dd>
+              <dt className="text-muted">Cost</dt>
+              <dd className="font-mono text-[12px] tabular">
+                agent {usd(r.agent_usage.cost_usd)} · jury {usd(r.jury_usage.cost_usd)}
+              </dd>
+            </dl>
           </section>
         </aside>
       </div>

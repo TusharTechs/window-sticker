@@ -31,7 +31,7 @@ from windowsticker.agents.config import AgentConfig
 from windowsticker.agents.guardrails import PROFILES, GuardrailEngine
 from windowsticker.db.models import EventRow, LabelRow, RunRow, TestRow
 from windowsticker.db.session import Database
-from windowsticker.service import create_test, label_run, result_for, run_counts
+from windowsticker.service import create_test, is_internal, label_run, result_for, run_counts
 from windowsticker.stats.ab import compare_rates
 from windowsticker.stats.rating import MIN_TRIALS_FOR_RATING, THRESHOLDS, runs_needed_for
 from windowsticker.sticker.render import render_badge, render_sticker, sticker_data
@@ -58,6 +58,9 @@ class LabelIn(BaseModel):
 def _test_out(t: TestRow, counts: dict[str, int] | None = None) -> dict[str, Any]:
     return {
         "id": t.id,
+        "internal": is_internal(t),
+        "imported": t.concurrency == 0,
+        "scenarios": list(t.scenarios or []),
         "status": t.status,
         "agent_name": t.agent_name,
         "agent_fingerprint": t.agent_fingerprint,
@@ -278,14 +281,37 @@ def create_app(
         return _test_out(row)
 
     @app.get("/api/tests")
-    async def list_tests(limit: int = Query(50, le=200)) -> list[dict[str, Any]]:
+    async def list_tests(
+        limit: int = Query(50, le=200), include_internal: bool = False
+    ) -> list[dict[str, Any]]:
         async with db.session() as s:
             rows = (
-                (await s.execute(select(TestRow).order_by(desc(TestRow.created_at)).limit(limit)))
+                (await s.execute(select(TestRow).order_by(desc(TestRow.created_at)).limit(400)))
                 .scalars()
                 .all()
             )
-        return [_test_out(t) for t in rows]
+        shown = [t for t in rows if include_internal or not is_internal(t)]
+        return [_test_out(t) for t in shown[:limit]]
+
+    @app.get("/api/host")
+    async def host() -> dict[str, Any]:
+        """The Vultr infrastructure behind every run (shown on run and test pages)."""
+        from windowsticker.config import get_settings
+
+        st = get_settings()
+        m = json.loads((Path(__file__).parents[1] / "measurements.json").read_text())
+        return {
+            "provider": "Vultr",
+            "plan": st.host_plan,
+            "region": st.host_region,
+            "hourly_usd": st.host_hourly_usd,
+            "cpu": m["host"]["cpu"],
+            "runtime": m["host"]["runtime"],
+            "inference": "Vultr Serverless Inference",
+            "jury": ["clef", "d3"],
+            "firewall": "Vultr firewall group: SSH from the operator only; 80/443 public",
+            "boot_p50_s": m["boot"]["p50_s"],
+        }
 
     @app.get("/api/tests/{test_id}")
     async def get_test(test_id: str) -> dict[str, Any]:
@@ -377,7 +403,9 @@ def create_app(
 
         best: dict[str, TestRow] = {}
         for t in rows:
-            if t.scenarios or not t.sticker:  # focused tests (one trap) are for A/B, not ranking
+            if (
+                t.scenarios or not t.sticker or is_internal(t)
+            ):  # focused/internal tests are not ranked
                 continue
             # Per agent configuration keep the strongest evidence: rated over provisional,
             # then more runs, then newer. A small smoke test never displaces a full test.

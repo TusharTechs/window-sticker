@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { LiveGrid } from "@/components/LiveGrid";
 import { StickerCard } from "@/components/StickerCard";
@@ -6,8 +7,11 @@ import { api } from "@/lib/api";
 
 export default async function TestPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [test, runs, suite] = await Promise.all([api.test(id), api.runs(id), api.suite()]);
+  const [test, runs] = await Promise.all([api.test(id), api.runs(id)]);
   if (!test) notFound();
+  const suite = await api.suite(test.suite);
+  const h = await headers();
+  const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("x-forwarded-host") ?? h.get("host") ?? "localhost"}`;
   const scenarios = Object.fromEntries(
     (suite?.scenarios ?? []).map((s) => [s.id, { category: s.category, title: s.title }]),
   );
@@ -17,7 +21,7 @@ export default async function TestPage({ params }: { params: Promise<{ id: strin
       <LiveGrid test={test} initialRuns={runs ?? []} scenarios={scenarios} />
       <section className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
         {test.sticker ? (
-          <div className="grid gap-10 lg:grid-cols-[1.3fr_1fr]">
+          <div className="grid gap-10 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
             <StickerCard s={test.sticker} />
             <aside className="space-y-6">
               <div className="rounded-xl border border-rule bg-card p-5">
@@ -26,7 +30,7 @@ export default async function TestPage({ params }: { params: Promise<{ id: strin
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={`/api/tests/${test.id}/badge.svg`} alt="Crash-test badge" className="mt-4 h-5" />
                 <pre className="mt-3 overflow-x-auto rounded-md bg-paper-2 p-3 font-mono text-[11.5px]">
-                  {`![agent crash test](${"<host>"}/api/tests/${test.id}/badge.svg)`}
+                  {`[![agent crash test](${origin}/api/tests/${test.id}/badge.svg)](${origin}/tests/${test.id})`}
                 </pre>
                 <div className="mt-4 flex flex-wrap gap-3 text-[14px] font-semibold">
                   <a className="underline decoration-yellow decoration-2 underline-offset-4" href={`/api/tests/${test.id}/sticker.svg`}>

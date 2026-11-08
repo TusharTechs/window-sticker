@@ -14,8 +14,9 @@ from windowsticker.agents.config import AgentConfig
 from windowsticker.artifacts import record_json
 from windowsticker.db.models import LabelRow, RunRow, TestRow
 from windowsticker.db.session import Database
-from windowsticker.domain import utcnow
-from windowsticker.grading.fusion import is_serious
+from windowsticker.domain import JuryAnswer, RunEvidence, utcnow
+from windowsticker.grading.fusion import fuse, is_serious
+from windowsticker.grading.tripwires import evaluate_tripwires
 from windowsticker.runner.run import RunRecord
 from windowsticker.runner.test import RunSummary, TestResult, aggregate, apply_label
 from windowsticker.sticker.render import sticker_data
@@ -158,12 +159,84 @@ async def refresh_sticker(
     data = sticker_data(result, suite or load_suite(test.suite))
     data["precomputed"] = test.precomputed
     data["label"] = test.label
+    data.update(all_in_cost(test, data["total_cost_usd"]))
     async with db.session() as s:
         t = await s.get(TestRow, test_id)
         assert t is not None
         t.sticker = data
         await s.commit()
     return data
+
+
+async def regrade_test(db: Database, test_id: str) -> list[tuple[str, str, bool, bool]]:
+    """Re-grade a stored test's runs with the current tripwires, in place.
+
+    Evidence is immutable and the jury's stored answers are reused, so nothing is re-run and no
+    model is called. Each changed run keeps its previous verdict in an audit list on the record.
+    Returns (run_id, scenario_id, was_incident, now_incident) for every changed verdict.
+    """
+    changes: list[tuple[str, str, bool, bool]] = []
+    async with db.session() as s:
+        test = await s.get(TestRow, test_id)
+        if test is None:
+            raise KeyError(test_id)
+        suite = load_suite(test.suite)
+        rows = (await s.execute(select(RunRow).where(RunRow.test_id == test_id))).scalars().all()
+        for row in rows:
+            rec = dict(row.record)
+            evidence = RunEvidence.model_validate(rec["evidence"])
+            old = rec["verdict"]
+            answers = [JuryAnswer.model_validate(a) for a in old.get("jury", [])]
+            verdict = fuse(
+                evidence, evaluate_tripwires(suite.get(row.scenario_id), evidence), answers
+            )
+            new = verdict.model_dump(mode="json")
+            if new == old:
+                continue
+            if verdict.incident != old["incident"]:
+                changes.append((row.id, row.scenario_id, old["incident"], verdict.incident))
+            rec["regrades"] = [
+                *rec.get("regrades", []),
+                {"at": utcnow().isoformat(), "previous_verdict": old},
+            ]
+            rec["verdict"] = new
+            row.record = rec
+            row.incident = verdict.incident
+            row.serious = is_serious(verdict)
+            row.task_success = verdict.task_success
+            row.needs_label = verdict.needs_human_label
+            row.failure_mode = verdict.primary_failure_mode
+        await s.commit()
+    await refresh_sticker(db, test_id)
+    return changes
+
+
+def all_in_cost(test: TestRow, inference_usd: float) -> dict[str, Any]:
+    """Inference plus the VX1 host time the test occupied (the whole host, conservatively).
+
+    Imported CLI tests have no recorded duration, so only their inference cost is known.
+    """
+    from windowsticker.config import get_settings
+
+    if not (test.started_at and test.finished_at) or test.finished_at <= test.started_at:
+        return {"compute_cost_usd": None, "all_in_cost_usd": None, "wall_clock_s": None}
+    seconds = (test.finished_at - test.started_at).total_seconds()
+    compute = seconds / 3600 * get_settings().host_hourly_usd
+    return {
+        "compute_cost_usd": compute,
+        "all_in_cost_usd": inference_usd + compute,
+        "wall_clock_s": seconds,
+    }
+
+
+INTERNAL_MARKERS = ("smoke", "calibration", "local microvms", "ci check", "ci demo")
+
+
+def is_internal(t: TestRow) -> bool:
+    """Smoke tests, CI demos, calibration and local development runs: real, but not the
+    public record. Hidden from listings unless asked for."""
+    text = f"{t.label} {t.agent_name}".lower()
+    return any(m in text for m in INTERNAL_MARKERS)
 
 
 async def label_run(

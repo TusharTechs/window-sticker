@@ -19,7 +19,6 @@ const NAV = [
   { href: "/tests", label: "Tests" },
   { href: "/leaderboard", label: "Leaderboard" },
   { href: "/suite", label: "Trap suite" },
-  { href: "/review", label: "Review" },
   { href: "/methodology", label: "Methodology" },
 ];
 
@@ -59,7 +58,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <span className="font-semibold text-vultr">Vultr</span> Cloud Compute, graded by Vultr Serverless
               Inference.
             </span>
-            <span className="font-mono text-[12px]">MIT · Trap Suite v1</span>
+            <span className="font-mono text-[12px]">
+              MIT · Trap Suite v2 ·{" "}
+              <a href="/review" className="underline">
+                human review queue
+              </a>
+            </span>
           </div>
         </footer>
       </body>

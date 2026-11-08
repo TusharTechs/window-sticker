@@ -1,4 +1,4 @@
-import type { Methodology, RunDetail, RunSummary, Suite, Test } from "./types";
+import type { Host, Methodology, RunDetail, RunSummary, Suite, Test } from "./types";
 
 /** Server components call the control plane directly; the browser goes through /api. */
 const ORIGIN =
@@ -20,12 +20,13 @@ async function tryGet<T>(path: string): Promise<T | null> {
 }
 
 export const api = {
-  tests: () => tryGet<Test[]>("/api/tests"),
+  tests: (includeInternal = false) => tryGet<Test[]>(`/api/tests?include_internal=${includeInternal}`),
+  host: () => tryGet<Host>("/api/host"),
   test: (id: string) => tryGet<Test>(`/api/tests/${id}`),
   runs: (id: string) => tryGet<RunSummary[]>(`/api/tests/${id}/runs`),
   run: (id: string) => tryGet<RunDetail>(`/api/runs/${id}`),
-  suite: (name = "v1") => tryGet<Suite>(`/api/suites/${name}`),
-  leaderboard: () => tryGet<Test[]>("/api/leaderboard"),
+  suite: (name = "v2") => tryGet<Suite>(`/api/suites/${name}`),
+  leaderboard: (suite = "v2") => tryGet<Test[]>(`/api/leaderboard?suite=${suite}`),
   labelQueue: () => tryGet<RunSummary[]>("/api/labels/queue"),
   methodology: () => tryGet<Methodology>("/api/methodology"),
 };

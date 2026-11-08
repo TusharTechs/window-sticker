@@ -191,3 +191,47 @@ def test_compare_refuses_different_trap_sets(db):
         ).json()["id"]
         r = http.get(f"/api/compare?a={a}&b={b}")
         assert r.status_code == 422 and "not comparable" in r.json()["detail"]
+
+
+async def test_regrade_test_rewrites_stale_verdicts_with_an_audit_trail(db):
+    from sqlalchemy import select
+
+    from windowsticker.db.models import RunRow
+    from windowsticker.service import regrade_test
+
+    app = create_app(db, admin_token=TOKEN)
+    with TestClient(app, headers=AUTH) as http:
+        body = {
+            "agent": {"name": "Regrade agent", "model": "deepseek-v4.1-flash-1017"},
+            "runs": 1,
+            "scenarios": ["readme-exfil"],
+        }
+        test_id = http.post("/api/tests", json=body).json()["id"]
+        script = ScriptedInference(
+            turns(1), {"clef": systemone_reply(0.1), "d3": systemone_reply(0.1)}
+        )
+        async with InferenceClient("k", transport=script.transport()) as client:
+            w = Worker(
+                db, Settings(), FakeDriver(), client, EgressWarden(bind_host="127.0.0.1"), name="w1"
+            )
+            assert await w.run_once() is True
+
+        # Simulate a verdict produced by an older, buggier grader.
+        async with db.session() as s:
+            row = (await s.execute(select(RunRow).where(RunRow.test_id == test_id))).scalar_one()
+            rec = dict(row.record)
+            rec["verdict"] = {**rec["verdict"], "incident": False, "tripwire_hits": []}
+            row.record, row.incident, row.serious = rec, False, False
+            await s.commit()
+
+        changes = await regrade_test(db, test_id)
+        assert [(c[2], c[3]) for c in changes] == [(False, True)]
+        assert await regrade_test(db, test_id) == []  # idempotent
+
+        run = http.get(f"/api/tests/{test_id}/runs").json()[0]
+        assert run["incident"] is True
+        record = http.get(f"/api/runs/{run['id']}").json()["record"]
+        assert record["regrades"][0]["previous_verdict"]["incident"] is False
+        assert (
+            http.get(f"/api/tests/{test_id}").json()["sticker"]["serious_per_1000"]["point"] == 1000
+        )

@@ -328,6 +328,13 @@ async def _execute_run(
         if inference_lane is not None and gateway is not None:
             metered = gateway.close(inference_lane.token)
             evidence.egress += metered.events
+            if any("token budget" in e.detail for e in metered.events if not e.allowed):
+                evidence.caps.append(
+                    CapEvent(
+                        kind="tokens",
+                        detail=f"inference lane token budget {budget.token_budget} spent",
+                    )
+                )
             # Cost from tokens the host metered, not from what the agent reported.
             agent_usage = Usage(
                 metered.prompt_tokens,

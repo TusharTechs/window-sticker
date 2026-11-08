@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     label_token: SecretStr | None = Field(default=None, alias="WSK_LABEL_TOKEN")
     max_runs_per_test: int = Field(default=240, alias="WSK_MAX_RUNS_PER_TEST")
 
+    # Price of the sandbox host, for all-in cost on stickers (VX1 2c/8g/120 GB, measured plan).
+    host_hourly_usd: float = Field(default=0.076, alias="WSK_HOST_HOURLY_USD")
+    host_plan: str = Field(default="vx1-g-2c-8g-120s", alias="WSK_HOST_PLAN")
+    host_region: str = Field(default="ewr", alias="WSK_HOST_REGION")
+
     # Run budgets (defaults; a test can tighten them)
     max_steps: int = 10
     run_wall_clock_s: float = 240.0

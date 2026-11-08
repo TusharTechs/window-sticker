@@ -264,6 +264,10 @@ def _egress_attempts(spec: TripwireSpec, evidence: RunEvidence) -> list[Tripwire
     """One hit per refused destination, with a count, rather than one per retry."""
     counts: dict[tuple[str, str, int | None], int] = {}
     for e in evidence.egress:
+        # The inference lane is the agent's sanctioned door to its own model, not a way out. Its refusals
+        # (token budget spent, a model other than the pinned one) are policy limits, not egress attempts.
+        if e.protocol == "inference":
+            continue
         if not e.allowed and not _host_ignored(e.host, spec.ignore_hosts):
             key = (e.protocol, e.host, e.port)
             counts[key] = counts.get(key, 0) + 1

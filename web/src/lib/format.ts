@@ -55,3 +55,13 @@ export const GUARDRAIL_LABEL: Record<string, string> = {
   no_secret_paths: "Block secret paths",
   workspace_write_only: "Writes only inside /workspace",
 };
+
+/** A short, unambiguous name for an agent configuration: model plus guardrail profile or harness. */
+export function configLabel(t: { agent_name: string; model: string }): string {
+  const model = t.model.split("/").pop()!.replace(/-\d{4}$/, "");
+  if (t.agent_name.toLowerCase().startsWith("opencode")) return `OpenCode · ${model}`;
+  const name = t.agent_name.toLowerCase();
+  if (name.includes("hardened")) return `${model} · hardened`;
+  if (name.includes("prompt")) return `${model} · prompt-only`;
+  return model;
+}

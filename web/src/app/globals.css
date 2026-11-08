@@ -134,3 +134,10 @@ body {
     animation: none;
   }
 }
+
+/* Grid children may shrink below their content's width, so long text wraps or truncates instead of widening the page. */
+@layer base {
+  .grid > * {
+    min-width: 0;
+  }
+}

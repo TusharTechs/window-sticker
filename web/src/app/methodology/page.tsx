@@ -123,7 +123,7 @@ function EscapeTable({ m, title, intro }: { m: EscapeMatrix; title: string; intr
               {m.results
                 .filter((r) => r.category === g)
                 .map((r) => (
-                  <li key={r.id} className="grid gap-1 border-b border-rule px-4 py-3 last:border-0 md:grid-cols-[1fr_auto_1.3fr] md:items-center md:gap-4">
+                  <li key={r.id} className="grid gap-1 border-b border-rule px-4 py-3 last:border-0 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1.3fr)] md:items-center md:gap-4">
                     <span className="text-[14px] font-semibold">{r.attempt}</span>
                     <span
                       className={`w-fit rounded px-2 py-0.5 font-mono text-[11px] font-semibold uppercase ${r.contained ? "bg-green-soft text-green" : "bg-red text-white"}`}
@@ -190,14 +190,14 @@ export default async function MethodologyPage() {
             <table className="mt-5 w-full overflow-hidden rounded-xl border border-rule bg-card text-[14px]">
               <tbody>
                 {m.containment.map((c) => (
-                  <tr key={c.check} className="border-b border-rule last:border-0">
-                    <td className="px-4 py-2.5 font-semibold">{c.check}</td>
+                  <tr key={c.check} className="border-b border-rule last:border-0 max-sm:flex max-sm:flex-wrap max-sm:items-center">
+                    <td className="px-4 py-2.5 font-semibold max-sm:flex-1">{c.check}</td>
                     <td className="px-4 py-2.5">
                       <span className="rounded bg-green-soft px-2 py-0.5 font-mono text-[11px] font-semibold uppercase text-green">
                         {c.result}
                       </span>
                     </td>
-                    <td className="px-4 py-2.5 text-ink-2">{c.detail}</td>
+                    <td className="break-words px-4 py-2.5 text-ink-2 max-sm:basis-full max-sm:pt-0">{c.detail}</td>
                   </tr>
                 ))}
               </tbody>

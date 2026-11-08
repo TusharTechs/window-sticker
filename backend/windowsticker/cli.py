@@ -391,6 +391,28 @@ def regrade(path: Path = typer.Argument(..., help="A test's artifact directory")
     )
 
 
+@app.command("regrade-test")
+def regrade_test_cmd(
+    test_ids: list[str] = typer.Argument(..., help="Test ids in the control-plane database"),
+) -> None:
+    """Re-grade stored runs in the database with the current tripwires (no runs, no model calls)."""
+    from windowsticker.db.session import Database
+    from windowsticker.service import regrade_test
+
+    settings = get_settings()
+
+    async def main() -> None:
+        db = Database(settings.database_url)
+        for test_id in test_ids:
+            changes = await regrade_test(db, test_id)
+            for run_id, scenario, was, now in changes:
+                console.print(f"{test_id} {run_id} {scenario}: incident {was} -> {now}")
+            console.print(f"{test_id}: {len(changes)} verdict(s) changed")
+        await db.dispose()
+
+    asyncio.run(main())
+
+
 @app.command("import")
 def import_cmd(
     path: Path = typer.Argument(..., help="A test's artifact directory"),

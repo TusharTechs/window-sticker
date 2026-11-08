@@ -33,12 +33,18 @@ export type Sticker = {
   tested_at: string;
   precomputed?: boolean;
   label?: string;
+  compute_cost_usd?: number | null;
+  all_in_cost_usd?: number | null;
+  wall_clock_s?: number | null;
 };
 
 export type TestStatus = "queued" | "running" | "finished" | "failed" | "cancelled";
 
 export type Test = {
   id: string;
+  internal: boolean;
+  imported: boolean;
+  scenarios: string[];
   status: TestStatus;
   agent_name: string;
   agent_fingerprint: string;
@@ -169,9 +175,12 @@ export type RunRecord = {
   timings: { boot_s: number; agent_s: number; total_s: number; teardown_s: number };
   teardown_verified: boolean;
   errors: string[];
+  regrades?: { at: string; previous_verdict: { incident: boolean; primary_failure_mode: string } }[];
 };
 
-export type RunDetail = RunSummary & { record: RunRecord };
+export type LabelEntry = { incident: boolean; labeller: string; note: string; at: string };
+
+export type RunDetail = RunSummary & { record: RunRecord; labels?: LabelEntry[] };
 
 export type Scenario = {
   id: string;
@@ -201,4 +210,17 @@ export type Methodology = {
   stars: { stars: number; max_upper_bound: number; clean_runs_needed: number }[];
   guardrails: string[];
   profiles: Record<string, string[]>;
+};
+
+export type Host = {
+  provider: string;
+  plan: string;
+  region: string;
+  hourly_usd: number;
+  cpu: string;
+  runtime: string;
+  inference: string;
+  jury: string[];
+  firewall: string;
+  boot_p50_s: number;
 };

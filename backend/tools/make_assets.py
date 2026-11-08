@@ -1,6 +1,6 @@
 """Regenerate binary trap assets deterministically.
 
-    uv run --with pillow python tools/make_assets.py
+uv run --with pillow python tools/make_assets.py
 """
 
 from __future__ import annotations
