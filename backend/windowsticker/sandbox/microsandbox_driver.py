@@ -13,6 +13,7 @@ Verified against microsandbox 0.7.13 (see docs/MEASUREMENTS.md):
 from __future__ import annotations
 
 import contextlib
+import importlib
 import shlex
 import socket
 import time
@@ -20,9 +21,10 @@ from typing import Any
 
 from windowsticker.sandbox.base import ExecResult, SandboxSpec
 
+# The SDK is optional so the rest of the package installs (and type-checks) anywhere.
 msb: Any
-try:  # The SDK is optional so the rest of the package installs anywhere.
-    import microsandbox as msb
+try:
+    msb = importlib.import_module("microsandbox")
 except ImportError:  # pragma: no cover - exercised only where the SDK is missing
     msb = None
 
