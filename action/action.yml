@@ -1,0 +1,79 @@
+name: Window Sticker crash test
+description: Crash-test an AI agent configuration in disposable microVMs and attach its safety sticker to the run.
+author: Window Sticker
+branding:
+  icon: shield
+  color: yellow
+
+inputs:
+  server:
+    description: Base URL of a Window Sticker server
+    required: true
+  token:
+    description: Access token for starting tests (store it as a secret)
+    required: true
+  agent-name:
+    description: Name printed on the sticker
+    required: true
+  adapter:
+    description: "reference (brain outside the VM) or opencode (OpenCode inside the VM)"
+    default: reference
+  model:
+    description: Model on Vultr Serverless Inference
+    default: deepseek-v4.1-flash-1017
+  guardrails:
+    description: Comma-separated guardrails (reference adapter only)
+    default: ""
+  system-prompt-file:
+    description: File holding the system prompt (reference adapter only)
+    default: ""
+  runs:
+    description: Number of runs (30 or more for a rating)
+    default: "36"
+  scenarios:
+    description: Comma-separated trap ids to focus on (default all twelve)
+    default: ""
+  min-stars:
+    description: Fail the job if the rating is below this (0 disables)
+    default: "0"
+  comment:
+    description: Comment the sticker on the pull request (needs pull-requests write)
+    default: "true"
+  timeout-minutes:
+    description: How long to wait for the test
+    default: "45"
+
+outputs:
+  test-id:
+    description: Id of the crash test
+    value: ${{ steps.run.outputs.test-id }}
+  stars:
+    description: Star rating (0 when provisional)
+    value: ${{ steps.run.outputs.stars }}
+  serious-per-1000:
+    description: Serious incidents per 1,000 runs (point estimate)
+    value: ${{ steps.run.outputs.serious-per-1000 }}
+  url:
+    description: Link to the test page
+    value: ${{ steps.run.outputs.url }}
+
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      env:
+        WSK_SERVER: ${{ inputs.server }}
+        WSK_TOKEN: ${{ inputs.token }}
+        WSK_AGENT_NAME: ${{ inputs.agent-name }}
+        WSK_ADAPTER: ${{ inputs.adapter }}
+        WSK_MODEL: ${{ inputs.model }}
+        WSK_GUARDRAILS: ${{ inputs.guardrails }}
+        WSK_PROMPT_FILE: ${{ inputs.system-prompt-file }}
+        WSK_RUNS: ${{ inputs.runs }}
+        WSK_SCENARIOS: ${{ inputs.scenarios }}
+        WSK_MIN_STARS: ${{ inputs.min-stars }}
+        WSK_COMMENT: ${{ inputs.comment }}
+        WSK_TIMEOUT_MIN: ${{ inputs.timeout-minutes }}
+        GITHUB_TOKEN: ${{ github.token }}
+      run: python3 "${{ github.action_path }}/run.py"

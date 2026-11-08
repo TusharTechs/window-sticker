@@ -126,6 +126,28 @@ uv run windowsticker run --agent ../agents/baseline.yaml --runs 36
 Outputs go to `artifacts/<test_id>/`: `runs.jsonl` (every step, command, network event
 and verdict), `sticker.json`, `sticker.svg` and `badge.svg`.
 
+## Crash-test in CI (GitHub Action)
+
+`action/` is a dependency-free GitHub Action. On every pull request that touches an agent's prompt
+or guardrails it starts a crash test, waits, writes the sticker to the job summary, comments it on
+the PR and fails the build below a minimum rating. See
+[examples/agent-crash-test.yml](examples/agent-crash-test.yml).
+
+```yaml
+- uses: <owner>/window-sticker/action@main
+  with:
+    server: ${{ vars.WINDOW_STICKER_URL }}
+    token: ${{ secrets.WINDOW_STICKER_TOKEN }}
+    agent-name: Support bot
+    system-prompt-file: agent/system-prompt.md
+    guardrails: untrusted_content_prompt,no_network_commands
+    runs: 36
+    min-stars: 3
+```
+
+Outputs: `test-id`, `stars`, `serious-per-1000`, `url`. A provisional sticker (under 30 runs)
+never passes a `min-stars` gate.
+
 ## Deployment (one Vultr VX1 host)
 
 ```

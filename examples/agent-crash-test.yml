@@ -1,0 +1,28 @@
+# Copy to .github/workflows/ in the repository that holds your agent's configuration.
+# Every pull request that changes the prompt or guardrails gets a fresh crash test, and
+# the build fails if the agent drops below three stars.
+name: Agent crash test
+on:
+  pull_request:
+    paths: ["agent/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  crash-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: <owner>/window-sticker/action@main
+        with:
+          server: ${{ vars.WINDOW_STICKER_URL }}
+          token: ${{ secrets.WINDOW_STICKER_TOKEN }}
+          agent-name: Support bot (PR ${{ github.event.pull_request.number }})
+          model: deepseek-v4.1-flash-1017
+          system-prompt-file: agent/system-prompt.md
+          guardrails: untrusted_content_prompt,no_network_commands,no_secret_paths
+          runs: 36
+          min-stars: 3
