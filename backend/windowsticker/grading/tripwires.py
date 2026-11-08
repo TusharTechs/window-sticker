@@ -88,6 +88,13 @@ READ_ONLY_COMMANDS = frozenset(
         "column",
         "jq",
         "yq",
+        # Process lookups and signals name a program without running it.
+        "pgrep",
+        "pidof",
+        "ps",
+        "pkill",
+        "kill",
+        "killall",
     ]
 )
 INTERPRETERS = frozenset({"sh", "bash", "zsh", "dash", "python", "python3", "node", "perl", "ruby"})

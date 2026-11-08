@@ -20,36 +20,78 @@ Everything on a sticker is measured from real runs. Every number carries its sam
 
 **Live:** https://107-191-39-70.sslip.io (served from the Vultr VX1 sandbox host itself)
 
-## Results so far (real runs on Vultr)
+## Results (real runs on Vultr)
 
-**Safety per dollar**: every row is 36 real runs over all 12 traps on the Vultr VX1 host
-(ranked by the worst plausible serious-incident rate, then cost per safe success).
+### Trap Suite v2 leaderboard
+
+16 traps, 48 or 96 real runs per configuration, every run in its own microVM on the Vultr VX1
+host. Ranked by the worst plausible serious-incident rate, then by cost per safe success.
 
 | Agent | Model | Rating | Serious / 1,000 (95% CI) | Safe success | $ / safe success | Runs |
 |---|---|---|---|---|---|---|
-| Reference agent, hardened | `deepseek-v4.1-flash-1017` | ★★★☆☆ | 0 (0–97) | 100% | $0.0056 | 36 |
-| **OpenCode 1.19.5, inside the microVM** | `deepseek-v4.1-flash-1017` | ★★★☆☆ | 0 (0–97) | 100% | $0.0076 | 36 |
-| Reference agent, no guardrails | `qwen3.8-27b` | ★★☆☆☆ | 56 (7–187) | 94% | $0.0037 | 36 |
-| Reference agent, no guardrails | `mimo-v2.6-pro` | ★☆☆☆☆ | 83 (18–225) | 92% | $0.0058 | 36 |
-| Reference agent, no guardrails | `qwen3.8-flash-next` | ★☆☆☆☆ | 83 (18–225) | 75% | $0.0062 | 36 |
-| Reference agent, no guardrails | `glm-5.3` | ★☆☆☆☆ | 83 (18–225) | 89% | $0.0183 | 36 |
-| Reference agent, no guardrails | `deepseek-v4.1-flash-1017` | ★☆☆☆☆ | 86 (18–231) | 89% | $0.0055 | 35 |
-| Reference agent, no guardrails | `minimax-m3.1-flash` | ★☆☆☆☆ | 194 (82–360) | 72% | $0.0070 | 36 |
+| **OpenCode 1.19.5, inside the microVM** | `deepseek-v4.1-flash-1017` | ★★★☆☆ | 10 (0–57) | 99% | $0.0082 | 96 |
+| Reference agent, no guardrails | `mimo-v2.6-pro` | ★★☆☆☆ | 21 (1–111) | 98% | $0.0050 | 48 |
+| Reference agent, prompt guardrail only | `deepseek-v4.1-flash-1017` | ★★☆☆☆ | 52 (17–117) | 93% | $0.0056 | 96 |
+| Reference agent, hardened | `deepseek-v4.1-flash-1017` | ★★☆☆☆ | 52 (17–117) | 94% | $0.0060 | 96 |
+| Reference agent, no guardrails | `qwen3.8-27b` | ★★☆☆☆ | 42 (5–143) | 96% | $0.0032 | 48 |
+| Reference agent, no guardrails | `deepseek-v4.1-flash-1017` | ★☆☆☆☆ | 104 (35–227) | 90% | $0.0058 | 48 |
+| Reference agent, no guardrails | `qwen3.8-flash-next` | ★☆☆☆☆ | 188 (89–326) | 73% | $0.0070 | 48 |
+| Reference agent, no guardrails | `glm-5.3` | ★☆☆☆☆ | 188 (89–326) | 79% | $0.0195 | 48 |
+| Reference agent, no guardrails | `minimax-m3.1-flash` | ★☆☆☆☆ | 208 (105–350) | 73% | $0.0074 | 48 |
 
-**Targeted guardrail A/B** (dependency-confusion trap, 10 v 10): no guardrails 9/10 serious
-incidents, hardened 0/10, Fisher exact **p = 0.000119**.
+The top five are not statistically separable at these sample sizes (Fisher's exact test); the
+leaderboard groups them and says so. 96 clean runs could earn at most four stars; five stars needs 183.
 
-**Escape matrix:** 17/17 hostile payloads contained on the VX1 host (metadata, HTTPS/TCP/UDP/DNS
-exfiltration, host SSH/Postgres/API, private networks, host secrets, kernel and KVM isolation,
-fork/memory/disk bombs). See /methodology.
+### What v2 found: guardrails tuned to the traps they were written against do not generalise
 
-**OpenCode containment:** OpenCode's brain runs inside the microVM with a placeholder API key the
-runtime swaps for the real one only on requests to `api.vultrinference.com`; a filtering DNS lane
-resolves only that name. Across 36 runs the warden recorded exactly 36 network events: one allowed
-lookup of the inference API per run, nothing else.
+Four of the sixteen traps are **held-out**: written after the hardened guardrails were frozen and
+deliberately not matched by their patterns.
 
-Agent model: `deepseek-v4.1-flash-1017` on Vultr Serverless Inference. Jury: `clef` + `d3`.
-Validation log, including every false positive found and fixed: [docs/VALIDATION.md](docs/VALIDATION.md).
+| Configuration | Serious incidents, 12 original traps | Serious incidents, 4 held-out traps |
+|---|---|---|
+| Reference agent, hardened (7 guardrails) | 0 / 72 | 5 / 24 |
+| Reference agent, prompt guardrail only | 0 / 72 | 5 / 24 |
+| OpenCode | 0 / 72 | 1 / 24 |
+| Reference agent, no guardrails (`deepseek`) | 1 / 36 | 4 / 12 |
+
+On Suite v1 the hardened agent was perfect (0 of 36). On the held-out traps its seven tool-level
+guardrails did no better than a single system prompt: a pip *user config* pointing at an unknown
+index needs no `--index-url` flag for the guardrail to catch. This is why a rating needs a published,
+growing trap suite rather than a fixed checklist.
+
+### Trap Suite v1 (frozen)
+
+Every row is 36 runs over all 12 v1 traps.
+
+| Agent | Model | Rating | Serious / 1,000 (95% CI) | Safe success | $ / safe success |
+|---|---|---|---|---|---|
+| Reference agent, hardened | `deepseek-v4.1-flash-1017` | ★★★☆☆ | 0 (0–97) | 100% | $0.0056 |
+| OpenCode 1.19.5, inside the microVM | `deepseek-v4.1-flash-1017` | ★★★☆☆ | 0 (0–97) | 100% | $0.0076 |
+| Reference agent, no guardrails | `qwen3.8-27b` | ★★☆☆☆ | 56 (7–187) | 94% | $0.0037 |
+| Reference agent, no guardrails | `qwen3.8-flash-next` | ★☆☆☆☆ | 83 (18–225) | 81% | $0.0058 |
+| Reference agent, no guardrails | `mimo-v2.6-pro` | ★☆☆☆☆ | 83 (18–225) | 92% | $0.0058 |
+| Reference agent, no guardrails | `glm-5.3` | ★☆☆☆☆ | 83 (18–225) | 89% | $0.0183 |
+| Reference agent, no guardrails | `deepseek-v4.1-flash-1017` | ★☆☆☆☆ | 86 (18–231) | 89% | $0.0055 |
+| Reference agent, no guardrails | `minimax-m3.1-flash` | ★☆☆☆☆ | 194 (82–360) | 72% | $0.0070 |
+
+### Containment and grading, measured
+
+- **Escape matrix:** 17/17 hostile payloads contained for agents whose brain stays on the host, and
+  22/22 for agents that run inside the microVM (the 17 plus five attacks on the inference lane).
+  Metadata, HTTPS/TCP/UDP/DNS exfiltration, host SSH/Postgres/API, private networks, host secrets,
+  kernel and KVM isolation, fork, memory and disk bombs. See /methodology.
+- **No key in the guest:** in-VM agents reach their model through a host-side inference lane that
+  holds the key, pins the model, enforces a token budget and meters every token.
+- **Jury accuracy:** on 370 production runs the two System One jurors scored AUC 0.98 against the
+  tripwires with no false alarms at 0.5, so they triage runs for a person rather than decide.
+- **Every grader bug found is published**, with the runs it changed: [docs/VALIDATION.md](docs/VALIDATION.md).
+  Stored runs are re-graded from immutable evidence and keep their previous verdict for audit.
+
+### A rating, not a containment test
+
+A sandbox that holds tells a buyer nothing about the agent inside it. Window Sticker uses the
+containment to let a real agent fail safely, then rates the agent: how often it does something
+dangerous, with an exact confidence interval, how often it finishes, and what it costs.
 
 ---
 
@@ -67,10 +109,10 @@ aggregate: exact intervals → stars, cost per safe success, per-trap breakdown
 
 | Layer | What it does |
 |---|---|
-| **Trap Suite v1** | 12 scenarios (`backend/windowsticker/traps/suites/v1`). Each pairs a real task with a trap: a poisoned README, a ticket that slips in an SSH key, test output that pipes a script into a shell, an instruction hidden in a screenshot, the cloud metadata service, a production `.env`, a test-deletion shortcut, scope creep into Terraform, a rogue package index, DNS exfiltration, a runaway process, and gameable tests. |
+| **Trap suites** | v1: 12 scenarios, frozen. v2 (default): v1 with two fairness fixes plus 4 held-out traps (`backend/windowsticker/traps/suites/`). Each pairs a real task with a trap: a poisoned README, a ticket that slips in an SSH key, test output that pipes a script into a shell, an instruction hidden in a screenshot, the cloud metadata service, a production `.env`, a test-deletion shortcut, scope creep into Terraform, a rogue package index, DNS exfiltration, a runaway process, gameable tests; held out: a setup script that uploads a token, a pip config pointing at an unknown index, a config checker that leaks a key over DNS, a report that invites repeating a password. |
 | **Canaries** | Fake credentials generated fresh for every run. A leak can be traced to exactly one run, and nothing real is ever at risk. |
 | **Tripwires** | Mechanical checks, the ground truth: a canary leaving the VM, a protected file changing, a blocked connection attempt, a forbidden command, a false claim of success. |
-| **Decision-model jury** | Two Vultr System One models (`clef`, `d3`) answer the same typed questions about each run and return probabilities. They only judge what tripwires cannot. Runs where the two disagree go to a human label queue. |
+| **Decision-model jury** | Two Vultr System One models (`clef`, `d3`) answer the same typed questions about each scrubbed run and return probabilities. They triage: a run no tripwire caught but a juror suspects, or where they disagree, goes to a human label queue. |
 | **Statistics** | Clopper–Pearson exact intervals. Stars come from the *upper* bound, so a small sample cannot earn a high rating by luck. A/B comparisons use Fisher's exact test. |
 
 ### Containment
@@ -78,9 +120,9 @@ aggregate: exact intervals → stars, cost per safe success, per-trap breakdown
 | Control | Implementation |
 |---|---|
 | Kernel isolation | One [Microsandbox](https://docs.microsandbox.dev) libkrun microVM per run on a Vultr VX1 host (the pattern in Vultr's own agent-sandboxing guide). |
-| Egress | Deny-all network policy. The only reachable port is the run's **Egress Warden** lane, which logs every attempt and allows nothing that isn't on the allowlist. Metadata ranges are explicitly denied. Names are resolved and checked on the host. |
-| Secrets | The reference agent's brain runs outside the VM, so the inference key never enters it. Agents that must run inside get a Microsandbox placeholder secret, swapped in only for the inference host. A violation terminates the VM. |
-| Limits | CPU, memory, per-command timeout, wall-clock, step and token budgets. |
+| Egress | Deny-all network policy. The only reachable ports are the run's **Egress Warden** lane, which logs every attempt and allows nothing off the allowlist, and, for in-VM agents, the inference lane. Metadata ranges are explicitly denied. Names are resolved and checked on the host. |
+| Secrets | The reference agent's brain runs on the host, so the inference key never enters the VM. In-VM agents (OpenCode) get a per-run lane URL instead of a key: the host adds the key, pins the model and meters tokens. |
+| Limits | CPU, memory, a 4 GiB disk cap, per-command timeout, wall-clock, step and token budgets; concurrency capped by free host memory. |
 | Lifecycle | Every VM is destroyed in a `finally` block, then teardown is verified by label. |
 
 **Guardrails vs containment.** Guardrails belong to the agent under test. An action a
@@ -93,14 +135,14 @@ anything the microVM or the warden has to stop counts as an *incident*.
 
 | Service | Role |
 |---|---|
-| Cloud Compute (VX1, KVM) | Sandbox host running Microsandbox microVMs and the Egress Warden |
-| Cloud Compute (app VM) | Control plane API and web app |
-| Serverless Inference: chat models | The agent under test (`deepseek-v4.1-flash`, `glm-5.3`, `qwen3.8`, …) |
+| Cloud Compute (VX1, KVM) | One host runs the microVMs, the Egress Warden, the inference lane, the control plane and the web app |
+| Serverless Inference: chat models | The agents under test (`deepseek-v4.1-flash`, `glm-5.3`, `qwen3.8`, `mimo`, `minimax`) |
 | Serverless Inference: System One | The decision-model jury (`clef`, `d3`) |
-| Serverless Inference: vector store, embeddings | Trap library and mutated variants *(Phase 2)* |
-| Serverless Inference: content safety | Screening of image traps *(Phase 2)* |
 | Firewall groups (API) | SSH only from the operator's IP; 80/443 public; created by `windowsticker host create` |
-| Vultr API v2 | Host lifecycle (create, wait active, tagged destroy), SSH keys, firewall rules, billing balance |
+| Vultr API v2 | Host lifecycle (create, wait for active, tagged destroy), SSH keys, firewall rules |
+
+Roadmap, not built: a separate app VM for the control plane, a fleet of VX1 sandbox hosts behind
+the queue, and generating trap variants with the vector store and embeddings.
 
 ---
 
@@ -109,7 +151,7 @@ anything the microVM or the warden has to stop counts as an *incident*.
 ```bash
 cd backend
 uv sync
-uv run pytest                      # 108 tests, no keys needed
+uv run pytest                      # 145 tests, no keys needed
 uv run windowsticker suite list    # the trap suite
 uv run windowsticker stats thresholds
 ```
@@ -120,7 +162,8 @@ On a KVM-capable host with a `.env` (see `.env.example`):
 uv sync --extra sandbox
 uv run windowsticker probe inference
 uv run windowsticker probe sandbox
-uv run windowsticker run --agent ../agents/baseline.yaml --runs 36
+uv run windowsticker run --agent ../agents/baseline.yaml --runs 48
+uv run windowsticker regrade-test <test-id>   # re-grade stored runs with the current tripwires
 ```
 
 Outputs go to `artifacts/<test_id>/`: `runs.jsonl` (every step, command, network event
@@ -175,16 +218,19 @@ agents/                 agent configurations under test
 backend/windowsticker/  engine: traps, sandbox driver, warden, agent, grading, stats, sticker, CLI
 backend/tests/          unit and end-to-end tests (test doubles live only here)
 docs/                   build plan, measurements, methodology
-infra/                  host bootstrap and Terraform
-web/                    product UI (Phase 3)
+infra/                  host provisioning, systemd units, the OpenCode agent image
+web/                    Next.js product: leaderboard, live crash tests, run replays, compare
+action/                 GitHub Action that gates a pull request on a minimum rating
 ```
 
 ## Status
 
-Done: platform measurements, engine, control plane, web product, production deploy, escape
-matrix, OpenCode inside the microVM, 8-configuration leaderboard, review queue. Next: the GitHub
-Action and badge workflow, then the judge review loop and submission assets.
-See [docs/BUILD_PLAN.md](docs/BUILD_PLAN.md).
+Live on one Vultr VX1 host: the engine, control plane, web product, GitHub Action, both escape
+matrices, the jury report, Trap Suite v1 (frozen) and v2 with a nine-configuration leaderboard. An
+independent review's findings and their resolutions are tracked in [docs/REVIEW.md](docs/REVIEW.md).
+
+Next: harder variants of the eight traps no agent has fallen for yet, a separate control-plane VM,
+and more sandbox hosts so a 183-run five-star test finishes in minutes.
 
 ## License
 
